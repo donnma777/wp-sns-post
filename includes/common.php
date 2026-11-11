@@ -11,6 +11,7 @@ function dsp_services() {
 	return array(
 		'bluesky'  => 'Bluesky',
 		'threads'  => 'Threads',
+		'x'        => 'X',
 		'facebook' => 'Facebook',
 		'discord'  => 'Discord',
 	);
@@ -22,6 +23,7 @@ function dsp_default_settings() {
 		'dry_run'                 => 1,
 		'enabled_bluesky'         => 0,
 		'enabled_threads'         => 0,
+		'enabled_x'               => 0,
 		'enabled_facebook'        => 0,
 		'enabled_discord'         => 0,
 		'bluesky_identifier'      => '',
@@ -32,6 +34,12 @@ function dsp_default_settings() {
 		'threads_token_expires'   => 0,
 		'threads_token_refreshed' => 0,
 		'threads_refresh_error'   => '',
+		// X：開発者コンソールの4つの鍵（期限なし）
+		'x_api_key'               => '',
+		'x_api_secret'            => '',
+		'x_access_token'          => '',
+		'x_access_secret'         => '',
+		'x_username'              => '',
 		'facebook_page_id'        => '',
 		'facebook_page_name'      => '',
 		'facebook_page_token'     => '',
@@ -55,6 +63,10 @@ function dsp_constant_settings() {
 	return array(
 		'bluesky_identifier'   => 'DSP_BLUESKY_IDENTIFIER',
 		'bluesky_app_password' => 'DSP_BLUESKY_APP_PASSWORD',
+		'x_api_key'            => 'DSP_X_API_KEY',
+		'x_api_secret'         => 'DSP_X_API_SECRET',
+		'x_access_token'       => 'DSP_X_ACCESS_TOKEN',
+		'x_access_secret'      => 'DSP_X_ACCESS_SECRET',
 		'facebook_page_id'     => 'DSP_FACEBOOK_PAGE_ID',
 		'facebook_page_token'  => 'DSP_FACEBOOK_PAGE_TOKEN',
 	);
@@ -110,6 +122,8 @@ function dsp_connected( $service, $s = null ) {
 			return '' !== $s['bluesky_identifier'] && '' !== $s['bluesky_app_password'];
 		case 'threads':
 			return '' !== $s['threads_token'] && '' !== $s['threads_user_id'];
+		case 'x':
+			return '' !== $s['x_api_key'] && '' !== $s['x_api_secret'] && '' !== $s['x_access_token'] && '' !== $s['x_access_secret'];
 		case 'facebook':
 			return '' !== $s['facebook_page_id'] && '' !== $s['facebook_page_token'];
 		case 'discord':
@@ -206,6 +220,8 @@ function dsp_error_text( $code, $data ) {
 	$message = '';
 	if ( isset( $data['error']['message'] ) ) {
 		$message = $data['error']['message'];
+	} elseif ( isset( $data['detail'] ) ) {
+		$message = $data['detail'];
 	} elseif ( isset( $data['message'] ) ) {
 		$message = $data['message'];
 	} elseif ( isset( $data['error'] ) && is_string( $data['error'] ) ) {

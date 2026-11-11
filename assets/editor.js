@@ -18,6 +18,22 @@
 		dry_run: 'テストモード（送っていない）',
 	};
 	var LIMIT = { bluesky: 300, threads: 500 };
+	// X は全角を2、URL を23と数えて280まで。記事の URL（改行＋23）の分を引く
+	var X_LIMIT = 280 - 24;
+
+	function xLength( text ) {
+		var urls = 0;
+		var rest = text.replace( /https?:\/\/[^\s　]+/g, function () {
+			urls++;
+			return '';
+		} );
+		var n = 0;
+		for ( var ch of rest ) { // eslint-disable-line no-unused-vars
+			var cp = ch.codePointAt( 0 );
+			n += ( cp <= 4351 || ( cp >= 8192 && cp <= 8205 ) || ( cp >= 8208 && cp <= 8223 ) || ( cp >= 8242 && cp <= 8247 ) ) ? 1 : 2;
+		}
+		return n + urls * 23;
+	}
 
 	function length( text ) {
 		if ( window.Intl && Intl.Segmenter ) {
@@ -74,6 +90,12 @@
 			} ).map( function ( s ) {
 				return s.label + ' は ' + LIMIT[ s.id ] + ' 文字まで（超えた分は切ります）';
 			} );
+			var hasX = data.services.some( function ( s ) {
+				return s.id === 'x';
+			} );
+			if ( hasX && xLength( text ) > X_LIMIT ) {
+				over.push( 'X は全角 ' + ( X_LIMIT / 2 ) + ' 文字（半角 ' + X_LIMIT + ' 文字）まで（超えた分は切ります）' );
+			}
 			children.push( el( C.TextareaControl, {
 				key: 'message',
 				label: '投稿文',

@@ -1,17 +1,18 @@
 # SNS Post
 
-記事を公開したら、Bluesky・Threads・Facebook ページ・Discord へ自動で投稿する WordPress プラグインです。フォームの送信やコメントも Discord に知らせます。
+記事を公開したら、Bluesky・Threads・X・Facebook ページ・Discord へ自動で投稿する WordPress プラグインです。フォームの送信やコメントも Discord に知らせます。
 
 仲介するサービスを通さず、サイトから各 SNS の API へ直接送ります。サイトのデータや SNS の権限を、ほかのサービスに預けずに済みます。
 
 ## できること
 
-| | Bluesky | Threads | Facebook ページ |
-|---|---|---|---|
-| リンクのカード | ○（アイキャッチ画像つき） | ○ | ○ |
-| ハッシュタグ・URL のリンク | ○ | ○（トピックになるタグは1つだけ） | ○ |
-| 文字数の上限 | 300（超えた分は切る） | 500（超えた分は切る） | なし |
-| つなぎ方 | アプリパスワード | ログインしてつなぐ（トークンは毎週自動で延長） | ログインしてつなぐ（ページのトークンは期限なし） |
+| | Bluesky | Threads | X | Facebook ページ |
+|---|---|---|---|---|
+| リンクのカード | ○（アイキャッチ画像つき） | ○ | ○ | ○ |
+| ハッシュタグ・URL のリンク | ○ | ○（トピックになるタグは1つだけ） | ○ | ○ |
+| 文字数の上限 | 300（超えた分は切る） | 500（超えた分は切る） | 280（全角は2、URL は23と数える。超えた分は切る） | なし |
+| つなぎ方 | アプリパスワード | ログインしてつなぐ（トークンは毎週自動で延長） | 開発者コンソールの4つの鍵（期限なし） | ログインしてつなぐ（ページのトークンは期限なし） |
+| 料金 | 無料 | 無料 | **有料**（API の従量課金。リンク付きの投稿は1件ごとにかかる） | 無料 |
 
 - 記事の編集画面の右側「SNS 投稿」で、記事ごとに投稿文を書けます。空なら記事のタイトルを投稿します
 - 「この記事は SNS に投稿しない」も選べます
@@ -51,7 +52,7 @@ do_action( 'dsp_form_submitted', 'お問い合わせ', array(
 
 1. [Releases](https://github.com/donnma777/wp-sns-post/releases) から zip をダウンロード
 2. 管理画面「プラグイン → 新規追加 → プラグインのアップロード」で zip を選んで有効化
-3. 「設定 → SNS 投稿」の Bluesky・Threads・Facebook・Discord のタブでそれぞれつなぎ、「確かめる」で確認
+3. 「設定 → SNS 投稿」の Bluesky・Threads・X・Facebook・Discord のタブでそれぞれつなぎ、「確かめる」で確認
 4. 「基本」のタブで送り先にチェックを入れて、テストモードを外す
 
 入れたばかりのときはテストモードで、どこにも送りません。ほかの自動投稿のプラグインから乗り換えるときは、そちらを止めてからテストモードを外してください（同じ記事が二重に投稿されます）。
@@ -61,6 +62,17 @@ do_action( 'dsp_form_submitted', 'お問い合わせ', array(
 ### Bluesky
 
 Bluesky の「設定 → プライバシーとセキュリティ → アプリパスワード」でアプリパスワードを作り、Bluesky のタブで ID（example.bsky.social など）と一緒に入れます。ダイレクトメッセージへのアクセスは許可しなくてかまいません（投稿にしか使いません）。
+
+### X
+
+X の API は従量課金です。先に開発者コンソールでクレジットを買っておかないと、投稿が失敗します（料金は開発者コンソールで確かめてください）。
+
+1. [X の開発者コンソール](https://console.x.com/)でアプリを作る
+2. アプリの「User authentication settings」で、権限（App permissions）を「Read and write」にする
+3. 「Keys and tokens」で API キー（Consumer Key）とシークレット、「Access Token and Secret」を作る。**権限を変えたあとに作ったアクセストークンでないと、投稿できません**
+4. 設定画面の X のタブに4つを入れて保存する（保存すると、つながるか確かめてアカウント名を出します）
+
+鍵に期限はありません。投稿はアプリを作ったアカウントからになります。「確かめる」は、そのたびに読み取りの料金が少しかかります。
 
 ### Threads と Facebook ページ（1つの Meta アプリでログインしてつなぐ）
 
@@ -100,6 +112,10 @@ Threads と Facebook は、1つの Meta アプリを作っておけば、設定�
 ```php
 define( 'DSP_BLUESKY_IDENTIFIER', 'example.bsky.social' );
 define( 'DSP_BLUESKY_APP_PASSWORD', 'xxxx-xxxx-xxxx-xxxx' );
+define( 'DSP_X_API_KEY', '...' );
+define( 'DSP_X_API_SECRET', '...' );
+define( 'DSP_X_ACCESS_TOKEN', '...' );
+define( 'DSP_X_ACCESS_SECRET', '...' );
 define( 'DSP_FACEBOOK_PAGE_ID', '123456789' );
 define( 'DSP_FACEBOOK_PAGE_TOKEN', 'EAAB...' );
 ```

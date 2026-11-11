@@ -36,6 +36,7 @@ function dsp_settings_tabs() {
 		'general'  => '基本',
 		'bluesky'  => 'Bluesky',
 		'threads'  => 'Threads',
+		'x'        => 'X',
 		'facebook' => 'Facebook',
 		'discord'  => 'Discord',
 		'log'      => 'ログ',
@@ -97,11 +98,29 @@ function dsp_handle_save() {
 		if ( '' !== $password && ! dsp_from_constant( 'bluesky_app_password' ) ) {
 			$changes['bluesky_app_password'] = $password;
 		}
+	} elseif ( 'x' === $section ) {
+		$x_changed = false;
+		foreach ( array( 'x_api_key', 'x_api_secret', 'x_access_token', 'x_access_secret' ) as $key ) {
+			$value = dsp_post_value( $key );
+			if ( '' !== $value && ! dsp_from_constant( $key ) ) {
+				$changes[ $key ] = $value;
+				$x_changed       = true;
+			}
+		}
+		if ( $x_changed ) {
+			$changes['x_username'] = '';
+		}
 	} elseif ( 'facebook' === $section ) {
 		$changes['facebook_config_id'] = preg_replace( '/\D/', '', dsp_post_value( 'facebook_config_id' ) );
 	}
 	dsp_update_settings( $changes );
-	dsp_flash( '' );
+	// X の鍵を入れ直したら、つながるか確かめてアカウント名を覚える
+	if ( ! empty( $x_changed ) && dsp_connected( 'x' ) ) {
+		$result = dsp_x_test( dsp_settings() );
+		dsp_flash( is_wp_error( $result ) ? new WP_Error( 'dsp', '保存しましたが、つながりません。' . $result->get_error_message() ) : '保存しました。' . $result );
+	} else {
+		dsp_flash( '' );
+	}
 	dsp_redirect_back();
 }
 add_action( 'admin_post_dsp_save', 'dsp_handle_save' );
@@ -169,6 +188,9 @@ function dsp_handle_action() {
 		case 'test_threads':
 			$result = dsp_connected( 'threads', $s ) ? dsp_threads_test( $s ) : new WP_Error( 'dsp', 'Threads とつながっていません。' );
 			break;
+		case 'test_x':
+			$result = dsp_connected( 'x', $s ) ? dsp_x_test( $s ) : new WP_Error( 'dsp', 'X の4つの鍵を入れてください。' );
+			break;
 		case 'test_facebook':
 			$result = dsp_connected( 'facebook', $s ) ? dsp_facebook_test( $s ) : new WP_Error( 'dsp', 'Facebook ページとつながっていません。' );
 			break;
@@ -198,6 +220,18 @@ function dsp_handle_action() {
 				)
 			);
 			$result = 'Threads のトークンを消しました。Threads の設定 → アカウント → ウェブサイトのアクセス許可 からアプリも外せます。';
+			break;
+		case 'disconnect_x':
+			dsp_update_settings(
+				array(
+					'x_api_key'       => '',
+					'x_api_secret'    => '',
+					'x_access_token'  => '',
+					'x_access_secret' => '',
+					'x_username'      => '',
+				)
+			);
+			$result = 'X の鍵を消しました。開発者コンソールの「Keys and tokens」で、アクセストークンを作り直す（取り消す）こともできます。';
 			break;
 		case 'disconnect_facebook':
 			dsp_update_settings(
@@ -397,6 +431,8 @@ function dsp_connection_text( $service, $s ) {
 			return '@' . $s['bluesky_identifier'];
 		case 'threads':
 			return '@' . ( '' !== $s['threads_username'] ? $s['threads_username'] : $s['threads_user_id'] );
+		case 'x':
+			return '' !== $s['x_username'] ? '@' . $s['x_username'] : '鍵が入っています（「確かめる」でアカウント名を出します）';
 		case 'facebook':
 			return 'ページ「' . ( '' !== $s['facebook_page_name'] ? $s['facebook_page_name'] : $s['facebook_page_id'] ) . '」';
 		case 'discord':
@@ -437,6 +473,48 @@ function dsp_render_tab_bluesky( $s ) {
 	</form>
 	<?php
 	dsp_render_service_buttons( 'bluesky', $s );
+}
+
+function dsp_render_tab_x( $s ) {
+	if ( dsp_connected( 'x', $s ) ) {
+		echo '<p><strong>' . esc_html( dsp_connection_text( 'x', $s ) ) . '</strong></p>';
+	}
+	dsp_render_service_buttons( 'x', $s );
+	$keys = array(
+		'x_api_key'       => array( 'API キー（Consumer Key）', 'text' ),
+		'x_api_secret'    => array( 'API キーのシークレット', 'password' ),
+		'x_access_token'  => array( 'アクセストークン', 'password' ),
+		'x_access_secret' => array( 'アクセストークンのシークレット', 'password' ),
+	);
+	?>
+	<hr />
+	<p><strong>X の API は有料です。</strong>リンク付きの投稿は1件ごとに料金がかかります（料金は X の開発者コンソールで見られます）。先にクレジットを買っておかないと、投稿が失敗します。</p>
+	<ol>
+		<li><a href="https://console.x.com/" target="_blank" rel="noopener noreferrer">X の開発者コンソール</a>でアプリを作る</li>
+		<li>アプリの「User authentication settings」で、権限（App permissions）を「Read and write」にする</li>
+		<li>「Keys and tokens」で API キー（Consumer Key）とシークレットを作り、「Access Token and Secret」も作る。<strong>権限を変えたあとに作ったアクセストークンでないと、投稿できません</strong></li>
+		<li>4つを下に入れて保存する（保存すると、つながるか確かめます）</li>
+	</ol>
+	<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+		<?php wp_nonce_field( 'dsp_save' ); ?>
+		<?php dsp_tab_field(); ?>
+		<input type="hidden" name="action" value="dsp_save" />
+		<input type="hidden" name="section" value="x" />
+		<table class="form-table" role="presentation">
+			<?php foreach ( $keys as $key => $field ) : ?>
+				<tr>
+					<th scope="row"><label for="dsp-<?php echo esc_attr( $key ); ?>"><?php echo esc_html( $field[0] ); ?></label></th>
+					<td>
+						<input type="<?php echo esc_attr( $field[1] ); ?>" id="dsp-<?php echo esc_attr( $key ); ?>" name="<?php echo esc_attr( $key ); ?>" class="regular-text" autocomplete="<?php echo 'password' === $field[1] ? 'new-password' : 'off'; ?>" value=""
+							<?php disabled( dsp_from_constant( $key ) ); ?> />
+						<p class="description"><?php echo esc_html( dsp_secret_state( $key, $s ) ); ?></p>
+					</td>
+				</tr>
+			<?php endforeach; ?>
+		</table>
+		<?php submit_button( '保存' ); ?>
+	</form>
+	<?php
 }
 
 /**
@@ -584,10 +662,10 @@ function dsp_render_service_buttons( $service, $s ) {
 	if ( 'threads' === $service ) {
 		dsp_action_button( 'refresh_threads', 'トークンを今すぐ延ばす' );
 	}
-	if ( ! ( 'bluesky' === $service && dsp_from_constant( 'bluesky_app_password' ) ) && ! ( 'facebook' === $service && dsp_from_constant( 'facebook_page_token' ) ) ) {
+	if ( ! ( 'bluesky' === $service && dsp_from_constant( 'bluesky_app_password' ) ) && ! ( 'facebook' === $service && dsp_from_constant( 'facebook_page_token' ) ) && ! ( 'x' === $service && dsp_from_constant( 'x_access_token' ) ) ) {
 		dsp_action_button( 'disconnect_' . $service, 'トークンを消す', 'delete', $label . ' のトークンを消しますか？' );
 	}
-	echo '</p><p class="description">「確かめる」はつながるかを見るだけで、投稿はしません。</p>';
+	echo '</p><p class="description">「確かめる」はつながるかを見るだけで、投稿はしません。' . ( 'x' === $service ? 'X は確かめるたびに、読み取りの料金が少しかかります。' : '' ) . '</p>';
 }
 
 function dsp_render_tab_discord( $s ) {
