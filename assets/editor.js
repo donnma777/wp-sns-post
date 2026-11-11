@@ -16,7 +16,6 @@
 		queued: '送る予定',
 		failed: '失敗',
 		dry_run: 'テストモード（送っていない）',
-		jetpack: 'Jetpack で投稿済み',
 	};
 	var LIMIT = { bluesky: 300, threads: 500 };
 
@@ -111,7 +110,7 @@
 				parts.push( published ? 'まだ' : '公開したら送ります' );
 			}
 			if ( published && s.send && ( ! r || r.status !== 'pending' ) ) {
-				var again = r && ( r.status === 'success' || r.status === 'jetpack' );
+				var again = r && ( r.status === 'success' );
 				parts.push( ' ', el( 'a', {
 					key: 's',
 					href: s.send,

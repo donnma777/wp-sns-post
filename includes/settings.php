@@ -258,7 +258,6 @@ function dsp_render_settings_page() {
 	}
 	$log      = get_option( DSP_LOG_OPTION, array() );
 	$services = dsp_services();
-	$jetpack  = defined( 'JETPACK_SOCIAL_PLUGIN_ROOT_FILE' ) || defined( 'JETPACK__VERSION' );
 	?>
 	<div class="wrap">
 		<h1>SNS 投稿</h1>
@@ -268,9 +267,6 @@ function dsp_render_settings_page() {
 
 		<p>記事を公開すると、約1分後に下の SNS へ投稿します。投稿文は記事の編集画面の右側「SNS 投稿」で記事ごとに書けます（空なら記事のタイトル）。</p>
 
-		<?php if ( $jetpack ) : ?>
-			<div class="notice notice-warning inline"><p>Jetpack が有効です。Jetpack Social の自動共有も動いていると二重に投稿されます。Jetpack 側の接続を切るか、Jetpack を止めてからテストモードを外してください（Jetpack がすでに投稿した SNS へは送りません）。</p></div>
-		<?php endif; ?>
 
 		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
 			<?php wp_nonce_field( 'dsp_save' ); ?>

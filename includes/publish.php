@@ -4,7 +4,7 @@
  *
  * _dsp_results = array(
  *   'bluesky' => array(
- *     'status'   => success | pending | failed | queued | dry_run | jetpack,
+ *     'status'   => success | pending | failed | queued | dry_run,
  *     'url'      => 投稿した URL,
  *     'message'  => エラーなど,
  *     'time'     => 最後に動いた時刻,
@@ -86,24 +86,6 @@ function dsp_build_content( $post ) {
 }
 
 /**
- * Jetpack Social がすでにその SNS へ流した記事か（乗り換えの途中で二重にならないように）。
- *
- * @return string|false 流した投稿の URL
- */
-function dsp_jetpack_shared( $post_id, $service ) {
-	$shares = get_post_meta( $post_id, '_publicize_shares', true );
-	if ( ! is_array( $shares ) ) {
-		return false;
-	}
-	foreach ( $shares as $share ) {
-		if ( isset( $share['service'], $share['status'] ) && $service === $share['service'] && 'success' === $share['status'] ) {
-			return isset( $share['message'] ) ? (string) $share['message'] : '';
-		}
-	}
-	return false;
-}
-
-/**
  * 1つの記事を、送れる SNS すべてへ送る。待ちがあれば、また WP-Cron で呼ぶ。
  */
 function dsp_run( $post_id ) {
@@ -138,7 +120,7 @@ function dsp_run( $post_id ) {
 
 		if ( isset( $results[ $service ] ) ) {
 			$r = $results[ $service ];
-			if ( in_array( $r['status'], array( 'success', 'dry_run', 'jetpack' ), true ) ) {
+			if ( in_array( $r['status'], array( 'success', 'dry_run' ), true ) ) {
 				continue;
 			}
 			if ( 'failed' === $r['status'] && (int) $r['attempts'] >= DSP_MAX_ATTEMPTS ) {
@@ -149,15 +131,6 @@ function dsp_run( $post_id ) {
 				continue;
 			}
 		} else {
-			$shared = dsp_jetpack_shared( $post_id, $service );
-			if ( false !== $shared ) {
-				$results[ $service ] = array(
-					'status' => 'jetpack',
-					'url'    => $shared,
-					'time'   => time(),
-				);
-				continue;
-			}
 			$r = array();
 		}
 		$r = array_merge(
