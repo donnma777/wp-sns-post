@@ -2,7 +2,7 @@
 /**
  * Plugin Name: SNS Post
  * Description: 記事を公開したら、Bluesky・Threads・Facebook ページへ自動で投稿します。WordPress.com などの外部サービスを通さず、サイトから各 SNS へ直接送ります。
- * Version: 1.0.0
+ * Version: 1.1.0
  * Author: donnma
  * Author URI: https://donnma.com/
  * Plugin URI: https://github.com/donnma777/wp-sns-post
@@ -15,7 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'DSP_VERSION', '1.0.0' );
+define( 'DSP_VERSION', '1.1.0' );
 define( 'DSP_FILE', __FILE__ );
 define( 'DSP_URL', plugin_dir_url( __FILE__ ) );
 
@@ -42,6 +42,7 @@ require __DIR__ . '/includes/facebook.php';
 require __DIR__ . '/includes/publish.php';
 require __DIR__ . '/includes/editor.php';
 require __DIR__ . '/includes/settings.php';
+require __DIR__ . '/includes/oauth.php';
 
 register_activation_hook( __FILE__, 'dsp_schedule_daily' );
 register_deactivation_hook( __FILE__, 'dsp_deactivate' );

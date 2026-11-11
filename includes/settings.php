@@ -59,6 +59,9 @@ function dsp_handle_save() {
 	if ( ! dsp_from_constant( 'bluesky_identifier' ) ) {
 		$changes['bluesky_identifier'] = ltrim( dsp_post_value( 'bluesky_identifier' ), '@' );
 	}
+	foreach ( array( 'meta_app_id', 'threads_app_id', 'facebook_config_id' ) as $key ) {
+		$changes[ $key ] = preg_replace( '/\D/', '', dsp_post_value( $key ) );
+	}
 	$password = dsp_post_value( 'bluesky_app_password' );
 	if ( '' !== $password && ! dsp_from_constant( 'bluesky_app_password' ) ) {
 		$changes['bluesky_app_password'] = $password;
@@ -199,6 +202,33 @@ function dsp_action_button( $do, $label, $class = 'secondary', $confirm = '' ) {
 	<?php
 }
 
+/**
+ * 「ログインしてつなぐ」のフォーム。アプリシークレットは定数がなければここで入れる（保存しない）。
+ */
+function dsp_oauth_form( $service, $s ) {
+	$label     = 'threads' === $service ? 'Threads' : 'Facebook';
+	$connected = dsp_connected( $service, $s );
+	?>
+	<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+		<?php wp_nonce_field( 'dsp_oauth_start' ); ?>
+		<input type="hidden" name="action" value="dsp_oauth_start" />
+		<input type="hidden" name="service" value="<?php echo esc_attr( $service ); ?>" />
+		<?php if ( '' === dsp_app_id( $service, $s ) ) : ?>
+			<p class="description">上の「Meta アプリ」に <?php echo esc_html( $label ); ?> のアプリ ID を入れて保存すると、ログインしてつなげます。</p>
+		<?php else : ?>
+			<?php if ( '' === dsp_app_secret_constant( $service ) ) : ?>
+				<p>
+					<label><?php echo esc_html( $label ); ?> のアプリシークレット<br />
+						<input type="password" name="app_secret" class="regular-text" autocomplete="new-password" value="" /></label><br />
+					<span class="description">つなぐときに使うだけで、保存しません。</span>
+				</p>
+			<?php endif; ?>
+			<?php submit_button( $label . ( $connected ? ' にログインしてつなぎ直す' : ' にログインしてつなぐ' ), $connected ? 'secondary' : 'primary', 'submit', false ); ?>
+		<?php endif; ?>
+	</form>
+	<?php
+}
+
 function dsp_secret_state( $key, $s ) {
 	if ( dsp_from_constant( $key ) ) {
 		return 'wp-config.php の定数を使っています';
@@ -274,6 +304,26 @@ function dsp_render_settings_page() {
 						</p>
 					</td>
 				</tr>
+				<tr>
+					<th scope="row">Meta アプリ</th>
+					<td>
+						<p class="description" style="margin-top:0">Threads と Facebook に「ログインしてつなぐ」ときに使います。1つのアプリに「Threads API」と「ページの管理」の2つのユースケースを入れ、アプリ設定 → ベーシック にある2組の ID を入れます。</p>
+						<p>
+							<label>Facebook のアプリ ID<br /><input type="text" name="meta_app_id" class="regular-text" autocomplete="off" value="<?php echo esc_attr( $s['meta_app_id'] ); ?>" /></label>
+						</p>
+						<p>
+							<label>Threads のアプリ ID<br /><input type="text" name="threads_app_id" class="regular-text" autocomplete="off" value="<?php echo esc_attr( $s['threads_app_id'] ); ?>" /></label>
+						</p>
+						<p>
+							<label>Facebook ログイン for Business の設定 ID（任意）<br /><input type="text" name="facebook_config_id" class="regular-text" autocomplete="off" value="<?php echo esc_attr( $s['facebook_config_id'] ); ?>" /></label><br />
+							<span class="description">ログインで「権限が無効」などと出るときだけ入れます。空なら権限（<?php echo esc_html( str_replace( ',', '・', DSP_FACEBOOK_SCOPES ) ); ?>）を並べて頼みます。</span>
+						</p>
+						<p>
+							戻り先の URL（Threads の「コールバック URL」と、Facebook ログインの「有効な OAuth リダイレクト URI」の両方に登録）<br />
+							<input type="text" class="large-text code" readonly value="<?php echo esc_attr( dsp_oauth_redirect_uri() ); ?>" onfocus="this.select()" />
+						</p>
+					</td>
+				</tr>
 			</table>
 			<?php submit_button( '保存' ); ?>
 		</form>
@@ -289,20 +339,24 @@ function dsp_render_settings_page() {
 				<p style="color:#cc1818"><?php echo esc_html( $s['threads_refresh_error'] ); ?></p>
 			<?php endif; ?>
 		<?php endif; ?>
-		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
-			<?php wp_nonce_field( 'dsp_threads_connect' ); ?>
-			<input type="hidden" name="action" value="dsp_threads_connect" />
-			<table class="form-table" role="presentation">
-				<tr>
-					<th scope="row"><label for="dsp-threads-token">長期アクセストークン</label></th>
-					<td>
-						<input type="password" id="dsp-threads-token" name="threads_token" class="large-text" autocomplete="new-password" value="" />
-						<p class="description">Meta for Developers のアプリ →「ユースケース」→ Threads API の設定 →「ユーザートークン生成ツール」で作ったトークン（threads_basic と threads_content_publish の権限）。</p>
-					</td>
-				</tr>
-			</table>
-			<?php submit_button( dsp_connected( 'threads', $s ) ? 'トークンを入れ直す' : 'Threads とつなぐ', 'secondary' ); ?>
-		</form>
+		<?php dsp_oauth_form( 'threads', $s ); ?>
+		<details>
+			<summary>トークンを手で入れる</summary>
+			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+				<?php wp_nonce_field( 'dsp_threads_connect' ); ?>
+				<input type="hidden" name="action" value="dsp_threads_connect" />
+				<table class="form-table" role="presentation">
+					<tr>
+						<th scope="row"><label for="dsp-threads-token">長期アクセストークン</label></th>
+						<td>
+							<input type="password" id="dsp-threads-token" name="threads_token" class="large-text" autocomplete="new-password" value="" />
+							<p class="description">Threads API の設定にある「ユーザートークン生成ツール」で作ったトークン（threads_basic と threads_content_publish の権限）。</p>
+						</td>
+					</tr>
+				</table>
+				<?php submit_button( 'このトークンでつなぐ', 'secondary' ); ?>
+			</form>
+		</details>
 
 		<hr />
 		<h2>Facebook ページ</h2>
@@ -314,14 +368,29 @@ function dsp_render_settings_page() {
 				<?php endif; ?>
 			</p>
 		<?php endif; ?>
+		<?php $pending = dsp_facebook_pending_pages(); ?>
+		<?php if ( $pending ) : ?>
+			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="border-left:4px solid #72aee6;padding:4px 12px;margin:12px 0">
+				<?php wp_nonce_field( 'dsp_choose_page' ); ?>
+				<input type="hidden" name="action" value="dsp_choose_page" />
+				<p><strong>投稿するページを選んでください</strong>（10分以内）</p>
+				<?php foreach ( $pending as $i => $page ) : ?>
+					<p><label><input type="radio" name="page_id" value="<?php echo esc_attr( $page['id'] ); ?>" <?php checked( 0, $i ); ?> /> <?php echo esc_html( $page['name'] ); ?>（<?php echo esc_html( $page['id'] ); ?>）</label></p>
+				<?php endforeach; ?>
+				<?php submit_button( 'このページとつなぐ', 'primary', 'submit', false ); ?>
+			</form>
+		<?php endif; ?>
+		<?php dsp_oauth_form( 'facebook', $s ); ?>
+		<details>
+			<summary>トークンを手で入れる</summary>
 		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
 			<?php wp_nonce_field( 'dsp_facebook_connect' ); ?>
 			<input type="hidden" name="action" value="dsp_facebook_connect" />
-			<p class="description">グラフ API エクスプローラで、アプリを選び pages_manage_posts・pages_read_engagement・pages_show_list の権限でユーザーのトークンを作って入れます。期限のないページのトークンに替えて保存します。アプリシークレットとユーザーのトークンは保存しません。</p>
+			<p class="description">グラフ API エクスプローラで、アプリを選び <?php echo esc_html( str_replace( ',', '・', DSP_FACEBOOK_SCOPES ) ); ?> の権限でユーザーのトークンを作って入れます。期限のないページのトークンに替えて保存します。アプリシークレットとユーザーのトークンは保存しません。</p>
 			<table class="form-table" role="presentation">
 				<tr>
 					<th scope="row"><label for="dsp-fb-app">アプリ ID</label></th>
-					<td><input type="text" id="dsp-fb-app" name="facebook_app_id" class="regular-text" autocomplete="off" value="" /></td>
+					<td><input type="text" id="dsp-fb-app" name="facebook_app_id" class="regular-text" autocomplete="off" value="<?php echo esc_attr( $s['meta_app_id'] ); ?>" /></td>
 				</tr>
 				<tr>
 					<th scope="row"><label for="dsp-fb-secret">アプリシークレット</label></th>
@@ -339,8 +408,9 @@ function dsp_render_settings_page() {
 					</td>
 				</tr>
 			</table>
-			<?php submit_button( dsp_connected( 'facebook', $s ) ? 'つなぎ直す' : 'Facebook ページとつなぐ', 'secondary' ); ?>
+			<?php submit_button( 'このトークンでつなぐ', 'secondary' ); ?>
 		</form>
+		</details>
 
 		<hr />
 		<h2>確かめる・切る</h2>

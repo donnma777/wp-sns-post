@@ -33,6 +33,10 @@ function dsp_default_settings() {
 		'facebook_page_id'        => '',
 		'facebook_page_name'      => '',
 		'facebook_page_token'     => '',
+		// Meta アプリ（ログインしてつなぐとき）。シークレットは保存しない
+		'meta_app_id'             => '',
+		'threads_app_id'          => '',
+		'facebook_config_id'      => '',
 	);
 }
 
@@ -102,6 +106,41 @@ function dsp_connected( $service, $s = null ) {
 			return '' !== $s['facebook_page_id'] && '' !== $s['facebook_page_token'];
 	}
 	return false;
+}
+
+/**
+ * 一時的に置く秘密（ログイン途中のアプリシークレット・ページのトークン）を、wp-config.php の鍵で暗号化する。
+ * 途中でやめたログインのデータが、期限切れの掃除まで DB に平文で残らないように。
+ */
+function dsp_seal( $data ) {
+	$json = wp_json_encode( $data );
+	if ( ! function_exists( 'openssl_encrypt' ) ) {
+		return array( 'plain' => $json );
+	}
+	$key = hash( 'sha256', wp_salt( 'auth' ) . 'dsp-seal', true );
+	$iv  = random_bytes( 12 );
+	$tag = '';
+	$ct  = openssl_encrypt( $json, 'aes-256-gcm', $key, OPENSSL_RAW_DATA, $iv, $tag );
+	return array( 'sealed' => base64_encode( $iv . $tag . $ct ) );
+}
+
+function dsp_unseal( $box ) {
+	if ( ! is_array( $box ) ) {
+		return null;
+	}
+	if ( isset( $box['plain'] ) ) {
+		return json_decode( $box['plain'], true );
+	}
+	if ( ! isset( $box['sealed'] ) || ! function_exists( 'openssl_decrypt' ) ) {
+		return null;
+	}
+	$raw = base64_decode( $box['sealed'], true );
+	if ( false === $raw || strlen( $raw ) < 29 ) {
+		return null;
+	}
+	$key  = hash( 'sha256', wp_salt( 'auth' ) . 'dsp-seal', true );
+	$json = openssl_decrypt( substr( $raw, 28 ), 'aes-256-gcm', $key, OPENSSL_RAW_DATA, substr( $raw, 0, 12 ), substr( $raw, 12, 16 ) );
+	return false === $json ? null : json_decode( $json, true );
 }
 
 /**
