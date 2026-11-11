@@ -242,6 +242,14 @@ function dsp_error_text( $code, $data ) {
 }
 
 /**
+ * 表示用の HTML の文字参照を、ふつうの文字に戻す。
+ * get_the_title() は「 - 」を &#8211; にするなど番号の文字参照を入れるので、&amp; だけでなく全部戻す。
+ */
+function dsp_plain( $text ) {
+	return html_entity_decode( (string) $text, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+}
+
+/**
  * 文字数（見た目の1文字）で切り詰める。
  */
 function dsp_length( $text ) {
@@ -324,7 +332,7 @@ function dsp_notify_failure( $post_id, $label, $message ) {
 %s
 %s",
 			$label,
-			wp_specialchars_decode( get_the_title( $post_id ), ENT_QUOTES ),
+			dsp_plain( get_the_title( $post_id ) ),
 			$message,
 			admin_url( 'post.php?post=' . (int) $post_id . '&action=edit' )
 		),

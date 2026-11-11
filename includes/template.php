@@ -87,13 +87,13 @@ function dsp_post_vars( $content ) {
 	$tags       = array();
 	foreach ( (array) $terms['category'] as $term ) {
 		if ( $term instanceof WP_Term ) {
-			$categories[] = wp_specialchars_decode( $term->name, ENT_QUOTES );
+			$categories[] = dsp_plain( $term->name );
 		}
 	}
 	foreach ( (array) $terms['post_tag'] as $term ) {
 		if ( $term instanceof WP_Term ) {
 			// ハッシュタグは空白や記号で切れるので、文字・数字・_ だけにする
-			$tag = preg_replace( '/[^\p{L}\p{N}_]+/u', '', wp_specialchars_decode( $term->name, ENT_QUOTES ) );
+			$tag = preg_replace( '/[^\p{L}\p{N}_]+/u', '', dsp_plain( $term->name ) );
 			if ( '' !== $tag ) {
 				$tags[] = '#' . $tag;
 			}
@@ -106,7 +106,7 @@ function dsp_post_vars( $content ) {
 		'{excerpt}'    => $content['description'],
 		'{categories}' => implode( '、', $categories ),
 		'{tags}'       => implode( ' ', $tags ),
-		'{site}'       => wp_specialchars_decode( get_bloginfo( 'name' ), ENT_QUOTES ),
+		'{site}'       => dsp_plain( get_bloginfo( 'name' ) ),
 	);
 }
 

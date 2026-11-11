@@ -60,7 +60,7 @@ function dsp_schedule( $post_id, $delay ) {
  * $message を渡すと、保存してある投稿文の代わりに使う（編集画面のプレビュー用）。
  */
 function dsp_build_content( $post, $message = null ) {
-	$title   = wp_specialchars_decode( get_the_title( $post ), ENT_QUOTES );
+	$title   = dsp_plain( get_the_title( $post ) );
 	$message = trim( null !== $message ? (string) $message : (string) get_post_meta( $post->ID, '_dsp_message', true ) );
 
 	// カードの説明文：Cocoon の「メタディスクリプション」→ 抜粋 → 本文の頭
@@ -71,7 +71,7 @@ function dsp_build_content( $post, $message = null ) {
 	if ( '' === $description ) {
 		$description = wp_trim_words( wp_strip_all_tags( strip_shortcodes( $post->post_content ) ), 120, '…' );
 	}
-	$description = trim( preg_replace( '/\s+/u', ' ', wp_specialchars_decode( $description, ENT_QUOTES ) ) );
+	$description = trim( preg_replace( '/[\s\x{00A0}]+/u', ' ', dsp_plain( $description ) ) );
 
 	return apply_filters(
 		'dsp_content',

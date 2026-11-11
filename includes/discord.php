@@ -168,7 +168,7 @@ function dsp_discord_test( $s ) {
 	if ( ! $uses ) {
 		return new WP_Error( 'dsp', 'Webhook の URL を入れてください。' );
 	}
-	$site   = wp_specialchars_decode( get_bloginfo( 'name' ), ENT_QUOTES );
+	$site   = dsp_plain( get_bloginfo( 'name' ) );
 	$errors = array();
 	foreach ( $uses as $url => $labels ) {
 		$result = dsp_discord_send_to( $url, sprintf( "%s：テスト通知です。\nこのチャンネルには「%s」を送ります。", $site, implode( '・', $labels ) ) );
@@ -207,7 +207,7 @@ function dsp_discord_on_form( $form_title, $fields ) {
 			array(
 				'{form}'   => $form_title,
 				'{fields}' => implode( "\n", $lines ),
-				'{site}'   => wp_specialchars_decode( get_bloginfo( 'name' ), ENT_QUOTES ),
+				'{site}'   => dsp_plain( get_bloginfo( 'name' ) ),
 			)
 		),
 		'form'
@@ -231,11 +231,11 @@ function dsp_discord_on_comment( $comment_id, $comment ) {
 			dsp_template( 'discord_comment' ),
 			array(
 				'{status}'  => '1' === (string) $comment->comment_approved ? '承認済み' : '承認待ち',
-				'{title}'   => wp_specialchars_decode( get_the_title( $post ), ENT_QUOTES ),
+				'{title}'   => dsp_plain( get_the_title( $post ) ),
 				'{author}'  => $comment->comment_author,
 				'{url}'     => get_comment_link( $comment ),
 				'{comment}' => wp_strip_all_tags( $comment->comment_content ),
-				'{site}'    => wp_specialchars_decode( get_bloginfo( 'name' ), ENT_QUOTES ),
+				'{site}'    => dsp_plain( get_bloginfo( 'name' ) ),
 			)
 		),
 		'comment'

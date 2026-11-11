@@ -751,7 +751,7 @@ function dsp_template_preview( $kind, $s ) {
 			array(
 				'{form}'   => 'お問い合わせ',
 				'{fields}' => "**お名前**: 山田 太郎\n**メッセージ本文**:\nはじめまして。",
-				'{site}'   => wp_specialchars_decode( get_bloginfo( 'name' ), ENT_QUOTES ),
+				'{site}'   => dsp_plain( get_bloginfo( 'name' ) ),
 			)
 		);
 	}
@@ -764,7 +764,7 @@ function dsp_template_preview( $kind, $s ) {
 				'{author}'  => '山田 太郎',
 				'{url}'     => home_url( '/?p=1#comment-1' ),
 				'{comment}' => 'とても参考になりました。',
-				'{site}'    => wp_specialchars_decode( get_bloginfo( 'name' ), ENT_QUOTES ),
+				'{site}'    => dsp_plain( get_bloginfo( 'name' ) ),
 			)
 		);
 	}
