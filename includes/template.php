@@ -57,6 +57,21 @@ function dsp_template_tags( $kind ) {
 }
 
 /**
+ * 記事ごとの、送り先別の投稿文（送り先 => 文）。空の文は持たない。
+ */
+function dsp_clean_messages( $list ) {
+	$out = array();
+	if ( is_array( $list ) ) {
+		foreach ( $list as $service => $text ) {
+			if ( isset( dsp_services()[ $service ] ) && is_string( $text ) && '' !== trim( $text ) ) {
+				$out[ $service ] = $text;
+			}
+		}
+	}
+	return $out;
+}
+
+/**
  * 記事ごとにハッシュタグを外した送り先。
  */
 function dsp_no_hashtags( $post_id ) {
@@ -88,7 +103,11 @@ function dsp_fill_template( $template, $vars ) {
  */
 function dsp_post_vars( $content, $service = '', $s = null ) {
 	$vars = dsp_post_vars_base( $content );
-	$off  = '' !== $service && in_array( $service, isset( $content['no_hashtags'] ) ? (array) $content['no_hashtags'] : array(), true );
+	// 記事で、この送り先だけ別の投稿文を書いてあれば、それを {message} にする
+	if ( '' !== $service && isset( $content['messages'][ $service ] ) && '' !== trim( (string) $content['messages'][ $service ] ) ) {
+		$vars['{message}'] = trim( (string) $content['messages'][ $service ] );
+	}
+	$off  ='' !== $service && in_array( $service, isset( $content['no_hashtags'] ) ? (array) $content['no_hashtags'] : array(), true );
 	if ( $off ) {
 		$vars['{tags}'] = '';
 	}

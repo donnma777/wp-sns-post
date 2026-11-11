@@ -25,6 +25,23 @@ function dsp_register_meta() {
 		);
 		register_post_meta(
 			$post_type,
+			'_dsp_messages',
+			array(
+				'type'          => 'object',
+				'single'        => true,
+				'default'       => array(),
+				'show_in_rest'  => array(
+					'schema' => array(
+						'type'                 => 'object',
+						'properties'           => array(),
+						'additionalProperties' => array( 'type' => 'string' ),
+					),
+				),
+				'auth_callback' => $auth,
+			)
+		);
+		register_post_meta(
+			$post_type,
 			'_dsp_no_hashtags',
 			array(
 				'type'          => 'array',
@@ -92,6 +109,9 @@ function dsp_rest_preview( $request ) {
 	}
 	$message = is_string( $request['message'] ) ? $request['message'] : null;
 	$content = dsp_build_content( $post, $message );
+	if ( is_array( $request['messages'] ) ) {
+		$content['messages'] = dsp_clean_messages( $request['messages'] );
+	}
 	if ( is_array( $request['no_hashtags'] ) ) {
 		$content['no_hashtags'] = array_map( 'strval', $request['no_hashtags'] );
 	}

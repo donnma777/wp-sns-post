@@ -31,6 +31,7 @@
 				post: e.getCurrentPostId(),
 				message: ( e.getEditedPostAttribute( 'meta' ) || {} )._dsp_message || '',
 				no_hashtags: ( e.getEditedPostAttribute( 'meta' ) || {} )._dsp_no_hashtags || [],
+				messages: ( e.getEditedPostAttribute( 'meta' ) || {} )._dsp_messages || {},
 				title: e.getEditedPostAttribute( 'title' ) || '',
 				excerpt: e.getEditedPostAttribute( 'excerpt' ) || '',
 				categories: e.getEditedPostAttribute( 'categories' ) || [],
@@ -153,7 +154,7 @@
 		if ( ! skip ) {
 			children.push( el( C.TextareaControl, {
 				key: 'message',
-				label: '投稿文',
+				label: '投稿文（共通）',
 				rows: 6,
 				value: message,
 				placeholder: post.title,
@@ -163,6 +164,45 @@
 					editPost( { meta: { _dsp_message: v } } );
 				},
 			} ) );
+
+			// 送り先ごとの投稿文。チェックを入れた送り先だけ欄を出し、共通の文から書き始める
+			var own = post.meta._dsp_messages;
+			own = own && ! Array.isArray( own ) ? own : {};
+			var setOwn = function ( id, value ) {
+				var next = Object.assign( {}, own );
+				if ( value === null ) {
+					delete next[ id ];
+				} else {
+					next[ id ] = value;
+				}
+				editPost( { meta: { _dsp_messages: next } } );
+			};
+			children.push( el( 'fieldset', { key: 'own', style: { margin: '0 0 8px' } },
+				el( 'legend', { style: { fontSize: '11px', fontWeight: 500, textTransform: 'uppercase', marginBottom: '4px' } }, '送り先ごとに別の文にする' ),
+				data.services.map( function ( s ) {
+					var on = Object.prototype.hasOwnProperty.call( own, s.id );
+					return el( 'div', { key: s.id },
+						el( C.CheckboxControl, {
+							label: s.label,
+							checked: on,
+							onChange: function ( v ) {
+								setOwn( s.id, v ? text : null );
+							},
+						} ),
+						on ? el( C.TextareaControl, {
+							label: s.label + ' の投稿文',
+							hideLabelFromVision: true,
+							rows: 4,
+							value: own[ s.id ],
+							placeholder: text,
+							help: '空なら共通の投稿文を使います。',
+							onChange: function ( v ) {
+								setOwn( s.id, v );
+							},
+						} ) : null
+					);
+				} )
+			) );
 			var tagged = data.services.filter( function ( s ) {
 				return s.hashtags;
 			} );
