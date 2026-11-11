@@ -22,7 +22,7 @@
 
 ## Discord
 
-チャンネルの「設定 → 連携サービス → ウェブフック」で作った URL を、設定画面の「Discord」に入れます。
+チャンネルの「設定 → 連携サービス → ウェブフック」で作った URL を、設定画面の Discord のタブに入れます。
 
 | 用途 | いつ送るか |
 |---|---|
@@ -51,8 +51,8 @@ do_action( 'dsp_form_submitted', 'お問い合わせ', array(
 
 1. [Releases](https://github.com/donnma777/wp-sns-post/releases) から zip をダウンロード
 2. 管理画面「プラグイン → 新規追加 → プラグインのアップロード」で zip を選んで有効化
-3. 「設定 → SNS 投稿」で SNS とつなぎ、「確かめる」で確認
-4. 送り先にチェックを入れて、テストモードを外す
+3. 「設定 → SNS 投稿」の Bluesky・Threads・Facebook・Discord のタブでそれぞれつなぎ、「確かめる」で確認
+4. 「基本」のタブで送り先にチェックを入れて、テストモードを外す
 
 入れたばかりのときはテストモードで、どこにも送りません。ほかの自動投稿のプラグインから乗り換えるときは、そちらを止めてからテストモードを外してください（同じ記事が二重に投稿されます）。
 
@@ -60,7 +60,7 @@ do_action( 'dsp_form_submitted', 'お問い合わせ', array(
 
 ### Bluesky
 
-Bluesky の「設定 → プライバシーとセキュリティ → アプリパスワード」でアプリパスワードを作り、ID（example.bsky.social など）と一緒に入れます。
+Bluesky の「設定 → プライバシーとセキュリティ → アプリパスワード」でアプリパスワードを作り、Bluesky のタブで ID（example.bsky.social など）と一緒に入れます。ダイレクトメッセージへのアクセスは許可しなくてかまいません（投稿にしか使いません）。
 
 ### Threads と Facebook ページ（1つの Meta アプリでログインしてつなぐ）
 
@@ -71,7 +71,7 @@ Threads と Facebook は、1つの Meta アプリを作っておけば、設定�
 1. [Meta for Developers](https://developers.facebook.com/apps/) でアプリを作る。ユースケースは「Threads API」と「ページのすべてを管理」の2つを選ぶ（ユースケースはあとから外せません）
 2. Threads API のユースケースで、権限 `threads_basic` と `threads_content_publish` を足す
 3. ページの管理のユースケースで、権限 `pages_show_list`・`pages_read_engagement`・`pages_manage_posts` を足す
-4. 設定画面の「Meta アプリ」に出ている**戻り先の URL**（`https://<サイト>/wp-admin/admin-post.php`）を、次の2か所に登録する
+4. 設定画面の Threads・Facebook のタブに出ている**戻り先の URL**（`https://<サイト>/wp-admin/admin-post.php`）を、次の2か所に登録する
    - Threads API の設定 →「コールバック URL」（リダイレクト用）
    - Facebook ログイン（for Business）の設定 →「有効な OAuth リダイレクト URI」
 5. 「アプリの役割 → 役割」で、自分の Threads アカウントを Threads テスターに足す。Threads の「設定 → アカウント → ウェブサイトのアクセス許可 → 招待」で承認する
@@ -79,9 +79,9 @@ Threads と Facebook は、1つの Meta アプリを作っておけば、設定�
 
 **つなぐ**
 
-1. 「アプリ設定 → ベーシック」には ID とシークレットが**2組**あります（上が Facebook 用、下のほうが Threads 用）。設定画面の「Meta アプリ」に、2つのアプリ ID を入れて保存する
-2. Threads の欄に Threads のアプリシークレットを入れ、「Threads にログインしてつなぐ」
-3. Facebook の欄に Facebook のアプリシークレットを入れ、「Facebook にログインしてつなぐ」。ページが複数あれば、戻ってきた画面で選ぶ
+1. 「アプリ設定 → ベーシック」には ID とシークレットが**2組**あります（上が Facebook 用、下のほうが Threads 用）。それぞれのタブで使う
+2. Threads のタブで、Threads のアプリ ID とシークレットを入れ、「Threads にログインしてつなぐ」
+3. Facebook のタブで、Facebook のアプリ ID とシークレットを入れ、「Facebook にログインしてつなぐ」。ページが複数あれば、戻ってきた画面で選ぶ
 
 アプリシークレットは、つなぐときに使うだけで保存しません（ログインの途中だけ、暗号化して10分置きます）。
 

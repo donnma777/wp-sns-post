@@ -258,12 +258,14 @@ function dsp_handle_oauth_callback() {
 	$error = isset( $_GET['error_description'] ) ? sanitize_text_field( wp_unslash( $_GET['error_description'] ) ) : ( isset( $_GET['error'] ) ? sanitize_text_field( wp_unslash( $_GET['error'] ) ) : '' );
 	// phpcs:enable
 
+	$flow   = dsp_unseal( get_transient( 'dsp_oauth_' . $state ) );
+	$tab    = is_array( $flow ) && 'threads' === $flow['service'] ? 'threads' : 'facebook';
 	$result = dsp_oauth_callback( $state, $code, $error );
 	if ( is_array( $result ) ) {
 		$result = 'ページが複数あります。投稿するページを選んでください。';
 	}
 	dsp_flash( $result );
-	dsp_redirect_back();
+	dsp_redirect_back( $tab );
 }
 add_action( 'admin_post', 'dsp_handle_oauth_callback' );
 

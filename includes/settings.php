@@ -31,9 +31,38 @@ function dsp_flash( $result ) {
 	set_transient( 'dsp_notice_' . get_current_user_id(), $notice, 60 );
 }
 
-function dsp_redirect_back() {
-	wp_safe_redirect( admin_url( 'options-general.php?page=dsp-settings' ) );
+function dsp_settings_tabs() {
+	return array(
+		'general'  => '基本',
+		'bluesky'  => 'Bluesky',
+		'threads'  => 'Threads',
+		'facebook' => 'Facebook',
+		'discord'  => 'Discord',
+		'log'      => 'ログ',
+	);
+}
+
+function dsp_settings_url( $tab = '' ) {
+	$url = admin_url( 'options-general.php?page=dsp-settings' );
+	return '' !== $tab && 'general' !== $tab && isset( dsp_settings_tabs()[ $tab ] ) ? add_query_arg( 'tab', $tab, $url ) : $url;
+}
+
+/**
+ * 設定画面に戻る。タブはフォームの tab（なければ引数）で決める。
+ */
+function dsp_redirect_back( $tab = '' ) {
+	if ( '' === $tab && isset( $_REQUEST['tab'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		$tab = sanitize_key( wp_unslash( $_REQUEST['tab'] ) ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+	}
+	wp_safe_redirect( dsp_settings_url( $tab ) );
 	exit;
+}
+
+/**
+ * フォームに今のタブを入れる（保存したあと同じタブに戻るように）。
+ */
+function dsp_tab_field() {
+	echo '<input type="hidden" name="tab" value="' . esc_attr( isset( $GLOBALS['dsp_tab'] ) ? $GLOBALS['dsp_tab'] : '' ) . '" />';
 }
 
 function dsp_check_request( $action ) {
@@ -52,17 +81,24 @@ function dsp_post_value( $key ) {
  */
 function dsp_handle_save() {
 	dsp_check_request( 'dsp_save' );
-	$changes = array( 'dry_run' => empty( $_POST['dry_run'] ) ? 0 : 1 );
-	foreach ( array_keys( dsp_services() ) as $service ) {
-		$changes[ 'enabled_' . $service ] = empty( $_POST[ 'enabled_' . $service ] ) ? 0 : 1;
-	}
-	if ( ! dsp_from_constant( 'bluesky_identifier' ) ) {
-		$changes['bluesky_identifier'] = ltrim( dsp_post_value( 'bluesky_identifier' ), '@' );
-	}
-	$changes['facebook_config_id'] = preg_replace( '/\D/', '', dsp_post_value( 'facebook_config_id' ) );
-	$password = dsp_post_value( 'bluesky_app_password' );
-	if ( '' !== $password && ! dsp_from_constant( 'bluesky_app_password' ) ) {
-		$changes['bluesky_app_password'] = $password;
+	$section = isset( $_POST['section'] ) ? sanitize_key( wp_unslash( $_POST['section'] ) ) : '';
+	$changes = array();
+	// タブごとに、そのタブにある項目だけ書き換える
+	if ( 'general' === $section ) {
+		$changes['dry_run'] = empty( $_POST['dry_run'] ) ? 0 : 1;
+		foreach ( array_keys( dsp_services() ) as $service ) {
+			$changes[ 'enabled_' . $service ] = empty( $_POST[ 'enabled_' . $service ] ) ? 0 : 1;
+		}
+	} elseif ( 'bluesky' === $section ) {
+		if ( ! dsp_from_constant( 'bluesky_identifier' ) ) {
+			$changes['bluesky_identifier'] = ltrim( dsp_post_value( 'bluesky_identifier' ), '@' );
+		}
+		$password = dsp_post_value( 'bluesky_app_password' );
+		if ( '' !== $password && ! dsp_from_constant( 'bluesky_app_password' ) ) {
+			$changes['bluesky_app_password'] = $password;
+		}
+	} elseif ( 'facebook' === $section ) {
+		$changes['facebook_config_id'] = preg_replace( '/\D/', '', dsp_post_value( 'facebook_config_id' ) );
 	}
 	dsp_update_settings( $changes );
 	dsp_flash( '' );
@@ -207,7 +243,7 @@ function dsp_admin_notices() {
 		printf(
 			'<div class="notice notice-warning"><p>%s <a href="%s">設定を開く</a></p></div>',
 			esc_html( $text ),
-			esc_url( admin_url( 'options-general.php?page=dsp-settings' ) )
+			esc_url( dsp_settings_url( 'threads' ) )
 		);
 	}
 }
@@ -221,6 +257,7 @@ function dsp_action_button( $do, $label, $class = 'secondary', $confirm = '' ) {
 		<?php endif; ?>
 	>
 		<?php wp_nonce_field( 'dsp_action' ); ?>
+		<?php dsp_tab_field(); ?>
 		<input type="hidden" name="action" value="dsp_action" />
 		<input type="hidden" name="do" value="<?php echo esc_attr( $do ); ?>" />
 		<?php submit_button( $label, $class, 'submit', false ); ?>
@@ -237,6 +274,7 @@ function dsp_oauth_form( $service, $s ) {
 	?>
 	<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
 		<?php wp_nonce_field( 'dsp_oauth_start' ); ?>
+		<?php dsp_tab_field(); ?>
 		<input type="hidden" name="action" value="dsp_oauth_start" />
 		<input type="hidden" name="service" value="<?php echo esc_attr( $service ); ?>" />
 		<table class="form-table" role="presentation">
@@ -279,141 +317,231 @@ function dsp_render_settings_page() {
 	if ( ! current_user_can( 'manage_options' ) ) {
 		return;
 	}
+	$tabs = dsp_settings_tabs();
+	$tab  = isset( $_GET['tab'] ) ? sanitize_key( wp_unslash( $_GET['tab'] ) ) : 'general'; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+	if ( ! isset( $tabs[ $tab ] ) ) {
+		$tab = 'general';
+	}
+	$GLOBALS['dsp_tab'] = $tab;
+
 	$s      = dsp_settings();
 	$notice = get_transient( 'dsp_notice_' . get_current_user_id() );
 	if ( $notice ) {
 		delete_transient( 'dsp_notice_' . get_current_user_id() );
 	}
-	$log      = get_option( DSP_LOG_OPTION, array() );
-	$services = dsp_services();
 	?>
 	<div class="wrap">
 		<h1>SNS 投稿</h1>
 		<?php if ( $notice ) : ?>
 			<div class="notice notice-<?php echo esc_attr( $notice[0] ); ?> is-dismissible"><p><?php echo esc_html( $notice[1] ); ?></p></div>
 		<?php endif; ?>
+		<nav class="nav-tab-wrapper" style="margin-bottom:16px">
+			<?php foreach ( $tabs as $id => $label ) : ?>
+				<a href="<?php echo esc_url( dsp_settings_url( $id ) ); ?>" class="nav-tab<?php echo $id === $tab ? ' nav-tab-active' : ''; ?>"><?php echo esc_html( $label ); ?></a>
+			<?php endforeach; ?>
+		</nav>
+		<?php call_user_func( 'dsp_render_tab_' . $tab, $s ); ?>
+	</div>
+	<?php
+}
 
-		<p>記事を公開すると、約1分後に下の SNS へ投稿します。投稿文は記事の編集画面の右側「SNS 投稿」で記事ごとに書けます（空なら記事のタイトル）。フォームの送信やコメントは、下の「Discord」の Webhook へ知らせます。</p>
-
-
-		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
-			<?php wp_nonce_field( 'dsp_save' ); ?>
-			<input type="hidden" name="action" value="dsp_save" />
-			<table class="form-table" role="presentation">
-				<tr>
-					<th scope="row">テストモード</th>
-					<td>
-						<label><input type="checkbox" name="dry_run" value="1" <?php checked( ! empty( $s['dry_run'] ) ); ?> /> 実際には送らず、ログに残すだけにする</label>
-					</td>
-				</tr>
-				<tr>
-					<th scope="row">送り先</th>
-					<td>
-						<?php foreach ( $services as $service => $label ) : ?>
-							<label style="margin-right:16px">
+/**
+ * 基本：テストモードと送り先。
+ */
+function dsp_render_tab_general( $s ) {
+	?>
+	<p>記事を公開すると、約1分後に下の送り先へ投稿します。投稿文は記事の編集画面の右側「SNS 投稿」で記事ごとに書けます（空なら記事のタイトル）。</p>
+	<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+		<?php wp_nonce_field( 'dsp_save' ); ?>
+		<?php dsp_tab_field(); ?>
+		<input type="hidden" name="action" value="dsp_save" />
+		<input type="hidden" name="section" value="general" />
+		<table class="form-table" role="presentation">
+			<tr>
+				<th scope="row">テストモード</th>
+				<td>
+					<label><input type="checkbox" name="dry_run" value="1" <?php checked( ! empty( $s['dry_run'] ) ); ?> /> 実際には送らず、ログに残すだけにする</label>
+					<p class="description">フォームやコメントの Discord 通知は、テストモードでも送ります。</p>
+				</td>
+			</tr>
+			<tr>
+				<th scope="row">送り先</th>
+				<td>
+					<?php foreach ( dsp_services() as $service => $label ) : ?>
+						<p style="margin:0 0 8px">
+							<label>
 								<input type="checkbox" name="enabled_<?php echo esc_attr( $service ); ?>" value="1" <?php checked( ! empty( $s[ 'enabled_' . $service ] ) ); ?> />
 								<?php echo esc_html( $label ); ?>
-								<?php if ( ! dsp_connected( $service, $s ) ) : ?>
-									<span class="description">（未接続）</span>
-								<?php endif; ?>
 							</label>
-						<?php endforeach; ?>
-					</td>
-				</tr>
-				<tr>
-					<th scope="row"><label for="dsp-bsky-id">Bluesky の ID</label></th>
-					<td>
-						<input type="text" id="dsp-bsky-id" name="bluesky_identifier" class="regular-text" autocomplete="off"
-							value="<?php echo esc_attr( $s['bluesky_identifier'] ); ?>" placeholder="example.bsky.social"
-							<?php disabled( dsp_from_constant( 'bluesky_identifier' ) ); ?> />
-					</td>
-				</tr>
-				<tr>
-					<th scope="row"><label for="dsp-bsky-pass">Bluesky のアプリパスワード</label></th>
-					<td>
-						<input type="password" id="dsp-bsky-pass" name="bluesky_app_password" class="regular-text" autocomplete="new-password" value=""
-							<?php disabled( dsp_from_constant( 'bluesky_app_password' ) ); ?> />
-						<p class="description">
-							<?php echo esc_html( dsp_secret_state( 'bluesky_app_password', $s ) ); ?>
-							ログイン用のパスワードではなく、Bluesky の 設定 → プライバシーとセキュリティ → アプリパスワード で作ったものを入れます（いつでも取り消せます）。
+							<span class="description">— <?php echo esc_html( dsp_connection_text( $service, $s ) ); ?></span>
+							<a href="<?php echo esc_url( dsp_settings_url( $service ) ); ?>">設定</a>
 						</p>
-					</td>
-				</tr>
+					<?php endforeach; ?>
+				</td>
+			</tr>
+		</table>
+		<?php submit_button( '保存' ); ?>
+	</form>
+	<?php
+}
+
+/**
+ * 送り先ごとの、つながっているかの一言。
+ */
+function dsp_connection_text( $service, $s ) {
+	if ( ! dsp_connected( $service, $s ) ) {
+		return 'discord' === $service ? '記事の公開の Webhook がまだありません' : 'まだつながっていません';
+	}
+	switch ( $service ) {
+		case 'bluesky':
+			return '@' . $s['bluesky_identifier'];
+		case 'threads':
+			return '@' . ( '' !== $s['threads_username'] ? $s['threads_username'] : $s['threads_user_id'] );
+		case 'facebook':
+			return 'ページ「' . ( '' !== $s['facebook_page_name'] ? $s['facebook_page_name'] : $s['facebook_page_id'] ) . '」';
+		case 'discord':
+			return sprintf( 'Webhook %d か所', count( dsp_discord_urls( 'post', $s ) ) );
+	}
+	return '';
+}
+
+function dsp_render_tab_bluesky( $s ) {
+	?>
+	<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+		<?php wp_nonce_field( 'dsp_save' ); ?>
+		<?php dsp_tab_field(); ?>
+		<input type="hidden" name="action" value="dsp_save" />
+		<input type="hidden" name="section" value="bluesky" />
+		<table class="form-table" role="presentation">
+			<tr>
+				<th scope="row"><label for="dsp-bsky-id">Bluesky の ID</label></th>
+				<td>
+					<input type="text" id="dsp-bsky-id" name="bluesky_identifier" class="regular-text" autocomplete="off"
+						value="<?php echo esc_attr( $s['bluesky_identifier'] ); ?>" placeholder="example.bsky.social"
+						<?php disabled( dsp_from_constant( 'bluesky_identifier' ) ); ?> />
+				</td>
+			</tr>
+			<tr>
+				<th scope="row"><label for="dsp-bsky-pass">アプリパスワード</label></th>
+				<td>
+					<input type="password" id="dsp-bsky-pass" name="bluesky_app_password" class="regular-text" autocomplete="new-password" value=""
+						<?php disabled( dsp_from_constant( 'bluesky_app_password' ) ); ?> />
+					<p class="description">
+						<?php echo esc_html( dsp_secret_state( 'bluesky_app_password', $s ) ); ?>
+						ログイン用のパスワードではなく、Bluesky の 設定 → プライバシーとセキュリティ → アプリパスワード で作ったものを入れます（いつでも取り消せます）。ダイレクトメッセージへのアクセスは許可しなくてかまいません。
+					</p>
+				</td>
+			</tr>
+		</table>
+		<?php submit_button( '保存' ); ?>
+	</form>
+	<?php
+	dsp_render_service_buttons( 'bluesky', $s );
+}
+
+/**
+ * Threads・Facebook の上に出す、Meta アプリの説明と戻り先の URL。
+ */
+function dsp_render_meta_app_note() {
+	?>
+	<p>Threads と Facebook は、1つの Meta アプリ（ユースケース「Threads API」と「ページの管理」）でログインしてつなぎます。</p>
+	<p>
+		戻り先の URL（Threads の「コールバック URL」と、Facebook ログインの「有効な OAuth リダイレクト URI」の両方に登録）<br />
+		<input type="text" class="large-text code" readonly value="<?php echo esc_attr( dsp_oauth_redirect_uri() ); ?>" onfocus="this.select()" />
+	</p>
+	<?php
+}
+
+function dsp_render_tab_threads( $s ) {
+	if ( dsp_connected( 'threads', $s ) ) :
+		?>
+		<p>
+			<strong><?php echo esc_html( dsp_connection_text( 'threads', $s ) ); ?></strong> とつながっています。
+			トークンの期限：<?php echo esc_html( wp_date( 'Y-m-d', (int) $s['threads_token_expires'] ) ); ?> ごろ（毎週自動で延ばします）
+		</p>
+		<?php if ( '' !== $s['threads_refresh_error'] ) : ?>
+			<p style="color:#cc1818"><?php echo esc_html( $s['threads_refresh_error'] ); ?></p>
+		<?php endif; ?>
+		<?php
+	endif;
+	dsp_render_service_buttons( 'threads', $s );
+	echo '<hr />';
+	dsp_render_meta_app_note();
+	dsp_oauth_form( 'threads', $s );
+	?>
+	<details>
+		<summary>トークンを手で入れる</summary>
+		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+			<?php wp_nonce_field( 'dsp_threads_connect' ); ?>
+			<?php dsp_tab_field(); ?>
+			<input type="hidden" name="action" value="dsp_threads_connect" />
+			<table class="form-table" role="presentation">
 				<tr>
-					<th scope="row">Meta アプリ</th>
+					<th scope="row"><label for="dsp-threads-token">長期アクセストークン</label></th>
 					<td>
-						<p class="description" style="margin-top:0">Threads と Facebook に「ログインしてつなぐ」ときに使います。1つのアプリに「Threads API」と「ページの管理」の2つのユースケースを入れます。アプリ ID とシークレットは、下の Threads・Facebook の欄で入れます。</p>
-						<p>
-							<label>Facebook ログイン for Business の設定 ID（任意）<br /><input type="text" name="facebook_config_id" class="regular-text" autocomplete="off" value="<?php echo esc_attr( $s['facebook_config_id'] ); ?>" /></label><br />
-							<span class="description">ログインで「権限が無効」などと出るときだけ入れます。空なら権限（<?php echo esc_html( str_replace( ',', '・', DSP_FACEBOOK_SCOPES ) ); ?>）を並べて頼みます。</span>
-						</p>
-						<p>
-							戻り先の URL（Threads の「コールバック URL」と、Facebook ログインの「有効な OAuth リダイレクト URI」の両方に登録）<br />
-							<input type="text" class="large-text code" readonly value="<?php echo esc_attr( dsp_oauth_redirect_uri() ); ?>" onfocus="this.select()" />
-						</p>
+						<input type="password" id="dsp-threads-token" name="threads_token" class="large-text" autocomplete="new-password" value="" />
+						<p class="description">Threads API の設定にある「ユーザートークン生成ツール」で作ったトークン（threads_basic と threads_content_publish の権限）。</p>
 					</td>
 				</tr>
 			</table>
-			<?php submit_button( '保存' ); ?>
+			<?php submit_button( 'このトークンでつなぐ', 'secondary' ); ?>
 		</form>
+	</details>
+	<?php
+}
 
-		<hr />
-		<h2>Threads</h2>
-		<?php if ( dsp_connected( 'threads', $s ) ) : ?>
-			<p>
-				<strong>@<?php echo esc_html( '' !== $s['threads_username'] ? $s['threads_username'] : $s['threads_user_id'] ); ?></strong> とつながっています。
-				トークンの期限：<?php echo esc_html( wp_date( 'Y-m-d', (int) $s['threads_token_expires'] ) ); ?> ごろ（毎週自動で延ばします）
-			</p>
-			<?php if ( '' !== $s['threads_refresh_error'] ) : ?>
-				<p style="color:#cc1818"><?php echo esc_html( $s['threads_refresh_error'] ); ?></p>
+function dsp_render_tab_facebook( $s ) {
+	if ( dsp_connected( 'facebook', $s ) ) :
+		?>
+		<p>
+			<strong><?php echo esc_html( dsp_connection_text( 'facebook', $s ) ); ?></strong>とつながっています（ページのトークンに期限はありません）。
+			<?php if ( dsp_from_constant( 'facebook_page_token' ) ) : ?>
+				wp-config.php の定数を使っています。
 			<?php endif; ?>
-		<?php endif; ?>
-		<?php dsp_oauth_form( 'threads', $s ); ?>
-		<details>
-			<summary>トークンを手で入れる</summary>
-			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
-				<?php wp_nonce_field( 'dsp_threads_connect' ); ?>
-				<input type="hidden" name="action" value="dsp_threads_connect" />
-				<table class="form-table" role="presentation">
-					<tr>
-						<th scope="row"><label for="dsp-threads-token">長期アクセストークン</label></th>
-						<td>
-							<input type="password" id="dsp-threads-token" name="threads_token" class="large-text" autocomplete="new-password" value="" />
-							<p class="description">Threads API の設定にある「ユーザートークン生成ツール」で作ったトークン（threads_basic と threads_content_publish の権限）。</p>
-						</td>
-					</tr>
-				</table>
-				<?php submit_button( 'このトークンでつなぐ', 'secondary' ); ?>
-			</form>
-		</details>
-
-		<hr />
-		<h2>Facebook ページ</h2>
-		<?php if ( dsp_connected( 'facebook', $s ) ) : ?>
-			<p>
-				ページ<strong>「<?php echo esc_html( '' !== $s['facebook_page_name'] ? $s['facebook_page_name'] : $s['facebook_page_id'] ); ?>」</strong>とつながっています（ページのトークンに期限はありません）。
-				<?php if ( dsp_from_constant( 'facebook_page_token' ) ) : ?>
-					wp-config.php の定数を使っています。
-				<?php endif; ?>
-			</p>
-		<?php endif; ?>
-		<?php $pending = dsp_facebook_pending_pages(); ?>
-		<?php if ( $pending ) : ?>
-			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="border-left:4px solid #72aee6;padding:4px 12px;margin:12px 0">
-				<?php wp_nonce_field( 'dsp_choose_page' ); ?>
-				<input type="hidden" name="action" value="dsp_choose_page" />
-				<p><strong>投稿するページを選んでください</strong>（10分以内）</p>
-				<?php foreach ( $pending as $i => $page ) : ?>
-					<p><label><input type="radio" name="page_id" value="<?php echo esc_attr( $page['id'] ); ?>" <?php checked( 0, $i ); ?> /> <?php echo esc_html( $page['name'] ); ?>（<?php echo esc_html( $page['id'] ); ?>）</label></p>
-				<?php endforeach; ?>
-				<?php submit_button( 'このページとつなぐ', 'primary', 'submit', false ); ?>
-			</form>
-		<?php endif; ?>
-		<?php dsp_oauth_form( 'facebook', $s ); ?>
-		<details>
-			<summary>トークンを手で入れる</summary>
+		</p>
+		<?php
+	endif;
+	$pending = dsp_facebook_pending_pages();
+	if ( $pending ) :
+		?>
+		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="border-left:4px solid #72aee6;padding:4px 12px;margin:12px 0">
+			<?php wp_nonce_field( 'dsp_choose_page' ); ?>
+			<?php dsp_tab_field(); ?>
+			<input type="hidden" name="action" value="dsp_choose_page" />
+			<p><strong>投稿するページを選んでください</strong>（10分以内）</p>
+			<?php foreach ( $pending as $i => $page ) : ?>
+				<p><label><input type="radio" name="page_id" value="<?php echo esc_attr( $page['id'] ); ?>" <?php checked( 0, $i ); ?> /> <?php echo esc_html( $page['name'] ); ?>（<?php echo esc_html( $page['id'] ); ?>）</label></p>
+			<?php endforeach; ?>
+			<?php submit_button( 'このページとつなぐ', 'primary', 'submit', false ); ?>
+		</form>
+		<?php
+	endif;
+	dsp_render_service_buttons( 'facebook', $s );
+	echo '<hr />';
+	dsp_render_meta_app_note();
+	dsp_oauth_form( 'facebook', $s );
+	?>
+	<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+		<?php wp_nonce_field( 'dsp_save' ); ?>
+		<?php dsp_tab_field(); ?>
+		<input type="hidden" name="action" value="dsp_save" />
+		<input type="hidden" name="section" value="facebook" />
+		<table class="form-table" role="presentation">
+			<tr>
+				<th scope="row"><label for="dsp-fb-config">Facebook ログイン for Business の設定 ID（任意）</label></th>
+				<td>
+					<input type="text" id="dsp-fb-config" name="facebook_config_id" class="regular-text" autocomplete="off" value="<?php echo esc_attr( $s['facebook_config_id'] ); ?>" />
+					<p class="description">ログインで「権限が無効」などと出るときだけ入れます。空なら権限（<?php echo esc_html( str_replace( ',', '・', DSP_FACEBOOK_SCOPES ) ); ?>）を並べて頼みます。</p>
+				</td>
+			</tr>
+		</table>
+		<?php submit_button( '設定 ID を保存', 'secondary' ); ?>
+	</form>
+	<details>
+		<summary>トークンを手で入れる</summary>
 		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
 			<?php wp_nonce_field( 'dsp_facebook_connect' ); ?>
+			<?php dsp_tab_field(); ?>
 			<input type="hidden" name="action" value="dsp_facebook_connect" />
 			<p class="description">グラフ API エクスプローラで、アプリを選び <?php echo esc_html( str_replace( ',', '・', DSP_FACEBOOK_SCOPES ) ); ?> の権限でユーザーのトークンを作って入れます。期限のないページのトークンに替えて保存します。アプリシークレットとユーザーのトークンは保存しません。</p>
 			<table class="form-table" role="presentation">
@@ -439,99 +567,100 @@ function dsp_render_settings_page() {
 			</table>
 			<?php submit_button( 'このトークンでつなぐ', 'secondary' ); ?>
 		</form>
-		</details>
+	</details>
+	<?php
+}
 
-		<hr />
-		<h2>Discord</h2>
-		<p class="description">チャンネルの設定 → 連携サービス → ウェブフック で作った URL を入れます。1行に1つ書けば、複数のチャンネルへ送ります。用途ごとの欄が空なら「ふだんの送り先」へ送ります。保存した URL は、末尾の4文字だけ見せています。</p>
-		<?php if ( defined( 'DSP_DISCORD_WEBHOOK_URL' ) && '' !== (string) DSP_DISCORD_WEBHOOK_URL ) : ?>
-			<p>wp-config.php の DSP_DISCORD_WEBHOOK_URL を、すべての用途で使っています。</p>
-		<?php else : ?>
-			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
-				<?php wp_nonce_field( 'dsp_discord_save' ); ?>
-				<input type="hidden" name="action" value="dsp_discord_save" />
-				<table class="form-table" role="presentation">
-					<?php foreach ( array_merge( array( '' => 'ふだんの送り先' ), dsp_discord_channels() ) as $channel => $label ) : ?>
-						<?php $key = '' === $channel ? 'discord_webhook' : 'discord_webhook_' . $channel; ?>
-						<tr>
-							<th scope="row"><label for="dsp-<?php echo esc_attr( $key ); ?>"><?php echo esc_html( $label ); ?></label></th>
-							<td>
-								<textarea id="dsp-<?php echo esc_attr( $key ); ?>" name="<?php echo esc_attr( $key ); ?>" class="large-text code" rows="2" autocomplete="off" spellcheck="false"
-									<?php if ( '' !== $channel ) : ?>placeholder="空ならふだんの送り先"<?php endif; ?>
-								><?php echo esc_textarea( implode( "
-", array_map( 'dsp_discord_mask', dsp_discord_lines( $s[ $key ] ) ) ) ); ?></textarea>
-								<?php if ( 'post' === $channel ) : ?>
-									<p class="description">記事の公開は、上の「送り先」で Discord にチェックを入れたときだけ送ります（テストモードの間は送りません）。</p>
-								<?php elseif ( 'form' === $channel ) : ?>
-									<p class="description">フォームのプラグインが <code>do_action( 'dsp_form_submitted', 'フォーム名', array( '項目名' => '値' ) )</code> を呼んだときに送ります。</p>
-								<?php endif; ?>
-							</td>
-						</tr>
-					<?php endforeach; ?>
-				</table>
-				<?php submit_button( 'Discord の設定を保存' ); ?>
-			</form>
-		<?php endif; ?>
-		<?php
-		if ( array_filter( array_map( function ( $c ) use ( $s ) {
-			return dsp_discord_urls( $c, $s );
-		}, array_keys( dsp_discord_channels() ) ) ) ) {
-			dsp_action_button( 'test_discord', 'Discord にテスト通知を送る' );
-		}
-		?>
+/**
+ * 各タブの「確かめる」「延ばす」「消す」。
+ */
+function dsp_render_service_buttons( $service, $s ) {
+	if ( ! dsp_connected( $service, $s ) ) {
+		return;
+	}
+	$label = dsp_services()[ $service ];
+	echo '<p>';
+	dsp_action_button( 'test_' . $service, $label . ' を確かめる' );
+	if ( 'threads' === $service ) {
+		dsp_action_button( 'refresh_threads', 'トークンを今すぐ延ばす' );
+	}
+	if ( ! ( 'bluesky' === $service && dsp_from_constant( 'bluesky_app_password' ) ) && ! ( 'facebook' === $service && dsp_from_constant( 'facebook_page_token' ) ) ) {
+		dsp_action_button( 'disconnect_' . $service, 'トークンを消す', 'delete', $label . ' のトークンを消しますか？' );
+	}
+	echo '</p><p class="description">「確かめる」はつながるかを見るだけで、投稿はしません。</p>';
+}
 
-		<hr />
-		<h2>確かめる・切る</h2>
-		<p>「確かめる」はつながるかを見るだけで、投稿はしません。</p>
-		<p>
-			<?php
-			foreach ( $services as $service => $label ) {
-				if ( 'discord' === $service ) {
-					continue;
-				}
-				if ( dsp_connected( $service, $s ) ) {
-					dsp_action_button( 'test_' . $service, $label . ' を確かめる' );
-				}
-			}
-			if ( dsp_connected( 'threads', $s ) ) {
-				dsp_action_button( 'refresh_threads', 'Threads のトークンを今すぐ延ばす' );
-			}
-			?>
-		</p>
-		<p>
-			<?php
-			foreach ( $services as $service => $label ) {
-				if ( 'discord' !== $service && dsp_connected( $service, $s ) && ! ( 'bluesky' === $service && dsp_from_constant( 'bluesky_app_password' ) ) && ! ( 'facebook' === $service && dsp_from_constant( 'facebook_page_token' ) ) ) {
-					dsp_action_button( 'disconnect_' . $service, $label . ' のトークンを消す', 'delete', $label . ' のトークンを消しますか？' );
-				}
-			}
-			?>
-		</p>
-
-		<hr />
-		<h2>ログ</h2>
-		<?php if ( ! $log ) : ?>
-			<p>まだありません。</p>
-		<?php else : ?>
-			<table class="widefat striped">
-				<thead><tr><th style="width:9em">日時</th><th style="width:7em">送り先</th><th>記事</th><th>内容</th></tr></thead>
-				<tbody>
-				<?php foreach ( $log as $row ) : ?>
+function dsp_render_tab_discord( $s ) {
+	?>
+	<p>チャンネルの設定 → 連携サービス → ウェブフック で作った URL を入れます。1行に1つ書けば、複数のチャンネルへ送ります。用途ごとの欄が空なら「ふだんの送り先」へ送ります。保存した URL は、末尾の4文字だけ見せています。</p>
+	<?php if ( defined( 'DSP_DISCORD_WEBHOOK_URL' ) && '' !== (string) DSP_DISCORD_WEBHOOK_URL ) : ?>
+		<p>wp-config.php の DSP_DISCORD_WEBHOOK_URL を、すべての用途で使っています。</p>
+	<?php else : ?>
+		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+			<?php wp_nonce_field( 'dsp_discord_save' ); ?>
+			<?php dsp_tab_field(); ?>
+			<input type="hidden" name="action" value="dsp_discord_save" />
+			<table class="form-table" role="presentation">
+				<?php foreach ( array_merge( array( '' => 'ふだんの送り先' ), dsp_discord_channels() ) as $channel => $label ) : ?>
+					<?php $key = '' === $channel ? 'discord_webhook' : 'discord_webhook_' . $channel; ?>
 					<tr>
-						<td><?php echo esc_html( wp_date( 'Y-m-d H:i', $row['time'] ) ); ?></td>
-						<td><?php echo esc_html( isset( $services[ $row['service'] ] ) ? $services[ $row['service'] ] : $row['service'] ); ?></td>
+						<th scope="row"><label for="dsp-<?php echo esc_attr( $key ); ?>"><?php echo esc_html( $label ); ?></label></th>
 						<td>
-							<?php if ( $row['post'] && get_post( $row['post'] ) ) : ?>
-								<a href="<?php echo esc_url( get_edit_post_link( $row['post'] ) ); ?>"><?php echo esc_html( get_the_title( $row['post'] ) ); ?></a>
+							<textarea id="dsp-<?php echo esc_attr( $key ); ?>" name="<?php echo esc_attr( $key ); ?>" class="large-text code" rows="2" autocomplete="off" spellcheck="false"
+								<?php if ( '' !== $channel ) : ?>placeholder="空ならふだんの送り先"<?php endif; ?>
+							><?php echo esc_textarea( implode( "\n", array_map( 'dsp_discord_mask', dsp_discord_lines( $s[ $key ] ) ) ) ); ?></textarea>
+							<?php if ( 'post' === $channel ) : ?>
+								<p class="description">記事の公開は、「基本」の送り先で Discord にチェックを入れたときだけ送ります（テストモードの間は送りません）。</p>
+							<?php elseif ( 'form' === $channel ) : ?>
+								<p class="description">フォームのプラグインが <code>do_action( 'dsp_form_submitted', 'フォーム名', array( '項目名' => '値' ) )</code> を呼んだときに送ります。</p>
 							<?php endif; ?>
 						</td>
-						<td style="word-break:break-all"><?php echo esc_html( $row['message'] ); ?></td>
 					</tr>
 				<?php endforeach; ?>
-				</tbody>
 			</table>
-			<p><?php dsp_action_button( 'clear_log', 'ログを消す' ); ?></p>
-		<?php endif; ?>
-	</div>
+			<?php submit_button( '保存' ); ?>
+		</form>
+	<?php endif; ?>
+	<?php
+	$used = array_filter(
+		array_map(
+			function ( $c ) use ( $s ) {
+				return dsp_discord_urls( $c, $s );
+			},
+			array_keys( dsp_discord_channels() )
+		)
+	);
+	if ( $used ) {
+		dsp_action_button( 'test_discord', 'テスト通知を送る' );
+		echo '<p class="description">使っている Webhook すべてへ、何に使うかを書いて送ります。</p>';
+	}
+}
+
+function dsp_render_tab_log( $s ) {
+	$log      = get_option( DSP_LOG_OPTION, array() );
+	$services = dsp_services();
+	if ( ! $log ) {
+		echo '<p>まだありません。</p>';
+		return;
+	}
+	?>
+	<table class="widefat striped">
+		<thead><tr><th style="width:9em">日時</th><th style="width:7em">送り先</th><th>記事</th><th>内容</th></tr></thead>
+		<tbody>
+		<?php foreach ( $log as $row ) : ?>
+			<tr>
+				<td><?php echo esc_html( wp_date( 'Y-m-d H:i', $row['time'] ) ); ?></td>
+				<td><?php echo esc_html( isset( $services[ $row['service'] ] ) ? $services[ $row['service'] ] : $row['service'] ); ?></td>
+				<td>
+					<?php if ( $row['post'] && get_post( $row['post'] ) ) : ?>
+						<a href="<?php echo esc_url( get_edit_post_link( $row['post'] ) ); ?>"><?php echo esc_html( get_the_title( $row['post'] ) ); ?></a>
+					<?php endif; ?>
+				</td>
+				<td style="word-break:break-all"><?php echo esc_html( $row['message'] ); ?></td>
+			</tr>
+		<?php endforeach; ?>
+		</tbody>
+	</table>
+	<p><?php dsp_action_button( 'clear_log', 'ログを消す' ); ?></p>
 	<?php
 }
