@@ -57,10 +57,11 @@ function dsp_schedule( $post_id, $delay ) {
 
 /**
  * 記事から投稿の中身を作る。
+ * $message を渡すと、保存してある投稿文の代わりに使う（編集画面のプレビュー用）。
  */
-function dsp_build_content( $post ) {
+function dsp_build_content( $post, $message = null ) {
 	$title   = wp_specialchars_decode( get_the_title( $post ), ENT_QUOTES );
-	$message = trim( (string) get_post_meta( $post->ID, '_dsp_message', true ) );
+	$message = trim( null !== $message ? (string) $message : (string) get_post_meta( $post->ID, '_dsp_message', true ) );
 
 	// カードの説明文：Cocoon の「メタディスクリプション」→ 抜粋 → 本文の頭
 	$description = trim( (string) get_post_meta( $post->ID, 'the_page_meta_description', true ) );

@@ -17,22 +17,87 @@
 		failed: '失敗',
 		dry_run: 'テストモード（送っていない）',
 	};
-	var LIMIT = { bluesky: 300, threads: 500 };
-	// X は全角を2、URL を23と数えて280まで。記事の URL（改行＋23）の分を引く
-	var X_LIMIT = 280 - 24;
+	var useState = wp.element.useState;
+	var useEffect = wp.element.useEffect;
 
-	function xLength( text ) {
-		var urls = 0;
-		var rest = text.replace( /https?:\/\/[^\s　]+/g, function () {
-			urls++;
-			return '';
-		} );
-		var n = 0;
-		for ( var ch of rest ) { // eslint-disable-line no-unused-vars
-			var cp = ch.codePointAt( 0 );
-			n += ( cp <= 4351 || ( cp >= 8192 && cp <= 8205 ) || ( cp >= 8208 && cp <= 8223 ) || ( cp >= 8242 && cp <= 8247 ) ) ? 1 : 2;
+	/**
+	 * プレビュー：送り先ごとに、ひな形で作った本文と文字数をサーバーで作って見せる。
+	 * 開いているあいだだけ、入力が止まって少したったら作り直す。
+	 */
+	function Preview() {
+		var ed = wp.data.useSelect( function ( select ) {
+			var e = select( 'core/editor' );
+			return {
+				post: e.getCurrentPostId(),
+				message: ( e.getEditedPostAttribute( 'meta' ) || {} )._dsp_message || '',
+				title: e.getEditedPostAttribute( 'title' ) || '',
+				excerpt: e.getEditedPostAttribute( 'excerpt' ) || '',
+				categories: e.getEditedPostAttribute( 'categories' ) || [],
+				tags: e.getEditedPostAttribute( 'tags' ) || [],
+			};
+		}, [] );
+		var openState = useState( false );
+		var open = openState[ 0 ];
+		var resultState = useState( null );
+		var result = resultState[ 0 ];
+		var setResult = resultState[ 1 ];
+		var key = JSON.stringify( ed );
+
+		useEffect( function () {
+			if ( ! open || ! ed.post || ! wp.apiFetch ) {
+				return undefined;
+			}
+			var alive = true;
+			var timer = setTimeout( function () {
+				wp.apiFetch( { path: '/dsp/v1/preview', method: 'POST', data: ed } ).then( function ( rows ) {
+					if ( alive ) {
+						setResult( { rows: rows } );
+					}
+				} ).catch( function ( err ) {
+					if ( alive ) {
+						setResult( { error: ( err && err.message ) || 'プレビューを作れませんでした。' } );
+					}
+				} );
+			}, 600 );
+			return function () {
+				alive = false;
+				clearTimeout( timer );
+			};
+		}, [ open, key ] );
+
+		var children = [ el( C.Button, {
+			key: 'toggle',
+			variant: 'secondary',
+			size: 'compact',
+			onClick: function () {
+				openState[ 1 ]( ! open );
+			},
+		}, open ? 'プレビューを閉じる' : '送る本文をプレビュー' ) ];
+
+		if ( open ) {
+			if ( ! result ) {
+				children.push( el( 'p', { key: 'wait' }, '作っています…' ) );
+			} else if ( result.error ) {
+				children.push( el( 'p', { key: 'err', style: { color: '#cc1818' } }, result.error ) );
+			} else {
+				result.rows.forEach( function ( r ) {
+					var count = r.limit
+						? r.length + ' / ' + r.limit + ( r.id === 'x' ? '（X の数え方：全角は2、URL は23）' : '' )
+						: r.length + ' 文字';
+					children.push( el( 'div', { key: r.id, style: { marginTop: '12px' } },
+						el( 'div', { style: { display: 'flex', justifyContent: 'space-between', gap: '8px', fontSize: '12px' } },
+							el( 'strong', null, r.label ),
+							el( 'span', { style: { color: r.trimmed ? '#cc1818' : '#757575' } }, count )
+						),
+						r.trimmed ? el( 'div', { style: { color: '#cc1818', fontSize: '12px' } }, '上限を超えるので短くしました' ) : null,
+						el( 'pre', { style: { whiteSpace: 'pre-wrap', wordBreak: 'break-all', background: '#f6f7f7', border: '1px solid #dcdcde', padding: '8px', margin: '4px 0 0', fontSize: '12px', fontFamily: 'inherit' } }, r.text )
+					) );
+				} );
+				children.push( el( 'p', { key: 'note', style: { color: '#757575', fontSize: '12px', marginTop: '8px' } },
+					'説明文（{excerpt}）が本文の頭から作られるときは、保存してある本文を使います。' ) );
+			}
 		}
-		return n + urls * 23;
+		return el( 'div', { style: { margin: '0 0 12px' } }, children );
 	}
 
 	function length( text ) {
@@ -85,17 +150,6 @@
 		} ) );
 
 		if ( ! skip ) {
-			var over = data.services.filter( function ( s ) {
-				return LIMIT[ s.id ] && len > LIMIT[ s.id ];
-			} ).map( function ( s ) {
-				return s.label + ' は ' + LIMIT[ s.id ] + ' 文字まで（超えた分は切ります）';
-			} );
-			var hasX = data.services.some( function ( s ) {
-				return s.id === 'x';
-			} );
-			if ( hasX && xLength( text ) > X_LIMIT ) {
-				over.push( 'X は全角 ' + ( X_LIMIT / 2 ) + ' 文字（半角 ' + X_LIMIT + ' 文字）まで（超えた分は切ります）' );
-			}
 			children.push( el( C.TextareaControl, {
 				key: 'message',
 				label: '投稿文',
@@ -103,7 +157,7 @@
 				value: message,
 				placeholder: post.title,
 				help: '空なら記事のタイトル。送り先ごとのひな形（設定 → SNS 投稿）の {message} に入ります。記事のリンクはカードで付くので、本文に書かなくて大丈夫です。' +
-					'（' + len + ' 文字）' + ( over.length ? ' ' + over.join( '、' ) : '' ),
+					'（' + len + ' 文字。送り先ごとの文字数は下のプレビューで）',
 				onChange: function ( v ) {
 					editPost( { meta: { _dsp_message: v } } );
 				},
@@ -111,6 +165,7 @@
 			children.push( el( 'p', { key: 'to', style: { color: '#757575', margin: '0 0 8px' } },
 				'送り先：' + data.services.map( function ( s ) { return s.label; } ).join( '・' ) +
 				'（公開から約1分後）' + ( data.dryRun ? '。今はテストモードなので実際には送りません' : '' ) ) );
+			children.push( el( Preview, { key: 'preview' } ) );
 		}
 
 		var published = post.saved === 'publish';

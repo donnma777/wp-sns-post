@@ -77,22 +77,25 @@ function dsp_fill_template( $template, $vars ) {
  * 記事の公開の差し込み。
  */
 function dsp_post_vars( $content ) {
-	$post_id    = isset( $content['post_id'] ) ? (int) $content['post_id'] : 0;
+	$post_id = isset( $content['post_id'] ) ? (int) $content['post_id'] : 0;
+	// プレビューでは、保存前のカテゴリー・タグ（ID の配列）を content に入れて渡す
+	$terms = array(
+		'category' => isset( $content['category_ids'] ) ? array_filter( array_map( 'get_term', (array) $content['category_ids'] ) ) : ( $post_id ? get_the_terms( $post_id, 'category' ) : array() ),
+		'post_tag' => isset( $content['tag_ids'] ) ? array_filter( array_map( 'get_term', (array) $content['tag_ids'] ) ) : ( $post_id ? get_the_terms( $post_id, 'post_tag' ) : array() ),
+	);
 	$categories = array();
 	$tags       = array();
-	if ( $post_id ) {
-		foreach ( (array) get_the_terms( $post_id, 'category' ) as $term ) {
-			if ( $term instanceof WP_Term ) {
-				$categories[] = wp_specialchars_decode( $term->name, ENT_QUOTES );
-			}
+	foreach ( (array) $terms['category'] as $term ) {
+		if ( $term instanceof WP_Term ) {
+			$categories[] = wp_specialchars_decode( $term->name, ENT_QUOTES );
 		}
-		foreach ( (array) get_the_terms( $post_id, 'post_tag' ) as $term ) {
-			if ( $term instanceof WP_Term ) {
-				// ハッシュタグは空白や記号で切れるので、文字・数字・_ だけにする
-				$tag = preg_replace( '/[^\p{L}\p{N}_]+/u', '', wp_specialchars_decode( $term->name, ENT_QUOTES ) );
-				if ( '' !== $tag ) {
-					$tags[] = '#' . $tag;
-				}
+	}
+	foreach ( (array) $terms['post_tag'] as $term ) {
+		if ( $term instanceof WP_Term ) {
+			// ハッシュタグは空白や記号で切れるので、文字・数字・_ だけにする
+			$tag = preg_replace( '/[^\p{L}\p{N}_]+/u', '', wp_specialchars_decode( $term->name, ENT_QUOTES ) );
+			if ( '' !== $tag ) {
+				$tags[] = '#' . $tag;
 			}
 		}
 	}
@@ -158,6 +161,25 @@ function dsp_fit_template( $template, $vars, $limit ) {
 	}
 	// ひな形そのものが長すぎるときは、各送り先の処理で後ろを切る
 	return $text;
+}
+
+/**
+ * プレビュー：その送り先へ送る本文と、長さ・上限・短くしたか。
+ * 各送り先の処理で最後に切る分も、ここで同じように切って見せる。
+ */
+function dsp_preview_text( $service, $content, $s = null ) {
+	$limit = dsp_text_limit( $service );
+	$full  = dsp_fill_template( dsp_template( $service, $s ), dsp_post_vars( $content ) );
+	$text  = dsp_render_text( $service, $content, $s );
+	if ( $limit ) {
+		$text = 'x' === $service ? dsp_x_trim( $text, $limit[1] ) : dsp_trim( $text, $limit[1] );
+	}
+	return array(
+		'text'    => $text,
+		'length'  => $limit ? call_user_func( $limit[0], $text ) : dsp_length( $text ),
+		'limit'   => $limit ? $limit[1] : 0,
+		'trimmed' => $limit && call_user_func( $limit[0], $full ) > $limit[1],
+	);
 }
 
 /**
