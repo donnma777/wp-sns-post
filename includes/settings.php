@@ -98,6 +98,16 @@ function dsp_handle_save() {
 		if ( '' !== $password && ! dsp_from_constant( 'bluesky_app_password' ) ) {
 			$changes['bluesky_app_password'] = $password;
 		}
+	} elseif ( 'templates' === $section ) {
+		$service = isset( $_POST['service'] ) ? sanitize_key( wp_unslash( $_POST['service'] ) ) : '';
+		if ( isset( dsp_services()[ $service ] ) ) {
+			$defaults = dsp_default_templates();
+			foreach ( array_keys( dsp_template_kinds( $service ) ) as $kind ) {
+				$value = isset( $_POST[ 'template_' . $kind ] ) ? trim( str_replace( "\r\n", "\n", sanitize_textarea_field( wp_unslash( $_POST[ 'template_' . $kind ] ) ) ) ) : '';
+				// 初めの形と同じなら空で持つ（あとで初めの形が変わったら、それに合わせる）
+				$changes[ 'template_' . $kind ] = $value === $defaults[ $kind ] ? '' : $value;
+			}
+		}
 	} elseif ( 'x' === $section ) {
 		$x_changed = false;
 		foreach ( array( 'x_api_key', 'x_api_secret', 'x_access_token', 'x_access_secret' ) as $key ) {
@@ -374,7 +384,12 @@ function dsp_render_settings_page() {
 				<a href="<?php echo esc_url( dsp_settings_url( $id ) ); ?>" class="nav-tab<?php echo $id === $tab ? ' nav-tab-active' : ''; ?>"><?php echo esc_html( $label ); ?></a>
 			<?php endforeach; ?>
 		</nav>
-		<?php call_user_func( 'dsp_render_tab_' . $tab, $s ); ?>
+		<?php
+		call_user_func( 'dsp_render_tab_' . $tab, $s );
+		if ( isset( dsp_services()[ $tab ] ) ) {
+			dsp_render_templates( $tab, $s );
+		}
+		?>
 	</div>
 	<?php
 }
@@ -712,6 +727,106 @@ function dsp_render_tab_discord( $s ) {
 		dsp_action_button( 'test_discord', 'テスト通知を送る' );
 		echo '<p class="description">使っている Webhook すべてへ、何に使うかを書いて送ります。</p>';
 	}
+}
+
+/**
+ * そのタブのひな形の種類。Discord はフォームとコメントの通知もある。
+ */
+function dsp_template_kinds( $service ) {
+	$kinds = array( $service => '記事の公開' );
+	if ( 'discord' === $service ) {
+		$kinds['discord_form']    = 'フォームの送信';
+		$kinds['discord_comment'] = 'コメント';
+	}
+	return $kinds;
+}
+
+/**
+ * 見本：いちばん新しい公開記事で埋める（フォーム・コメントは例の値で）。
+ */
+function dsp_template_preview( $kind, $s ) {
+	if ( 'discord_form' === $kind ) {
+		return dsp_fill_template(
+			dsp_template( $kind, $s ),
+			array(
+				'{form}'   => 'お問い合わせ',
+				'{fields}' => "**お名前**: 山田 太郎\n**メッセージ本文**:\nはじめまして。",
+				'{site}'   => wp_specialchars_decode( get_bloginfo( 'name' ), ENT_QUOTES ),
+			)
+		);
+	}
+	if ( 'discord_comment' === $kind ) {
+		return dsp_fill_template(
+			dsp_template( $kind, $s ),
+			array(
+				'{status}'  => '承認待ち',
+				'{title}'   => '記事のタイトル',
+				'{author}'  => '山田 太郎',
+				'{url}'     => home_url( '/?p=1#comment-1' ),
+				'{comment}' => 'とても参考になりました。',
+				'{site}'    => wp_specialchars_decode( get_bloginfo( 'name' ), ENT_QUOTES ),
+			)
+		);
+	}
+	$posts = get_posts(
+		array(
+			'post_type'   => dsp_post_types(),
+			'post_status' => 'publish',
+			'numberposts' => 1,
+			'has_password' => false,
+		)
+	);
+	if ( ! $posts ) {
+		return '';
+	}
+	return dsp_render_text( $kind, dsp_build_content( $posts[0] ), $s );
+}
+
+function dsp_render_templates( $service, $s ) {
+	?>
+	<hr />
+	<h2>投稿のひな形</h2>
+	<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+		<?php wp_nonce_field( 'dsp_save' ); ?>
+		<?php dsp_tab_field(); ?>
+		<input type="hidden" name="action" value="dsp_save" />
+		<input type="hidden" name="section" value="templates" />
+		<input type="hidden" name="service" value="<?php echo esc_attr( $service ); ?>" />
+		<table class="form-table" role="presentation">
+			<?php foreach ( dsp_template_kinds( $service ) as $kind => $label ) : ?>
+				<?php
+				$preview = dsp_template_preview( $kind, $s );
+				$limit   = 'discord_form' === $kind || 'discord_comment' === $kind ? null : dsp_text_limit( $kind );
+				?>
+				<tr>
+					<th scope="row"><label for="dsp-template-<?php echo esc_attr( $kind ); ?>"><?php echo esc_html( $label ); ?></label></th>
+					<td>
+						<textarea id="dsp-template-<?php echo esc_attr( $kind ); ?>" name="template_<?php echo esc_attr( $kind ); ?>" class="large-text" rows="4"><?php echo esc_textarea( dsp_template( $kind, $s ) ); ?></textarea>
+						<p class="description">
+							使える差し込み：
+							<?php
+							$tags = array();
+							foreach ( dsp_template_tags( $kind ) as $tag => $desc ) {
+								$tags[] = '<code>' . esc_html( $tag ) . '</code> ' . esc_html( $desc );
+							}
+							echo wp_kses( implode( '、', $tags ), array( 'code' => array() ) );
+							?>
+							。空にして保存すると初めの形に戻ります。
+							<?php if ( $limit ) : ?>
+								<?php echo esc_html( sprintf( '%d 文字を超えるときは、{excerpt}、{message} の順に短くします。', $limit[1] ) ); ?>
+							<?php endif; ?>
+						</p>
+						<?php if ( '' !== $preview ) : ?>
+							<p style="margin-bottom:4px"><?php echo 'discord_form' === $kind || 'discord_comment' === $kind ? '例：' : 'いちばん新しい記事で見ると：'; ?></p>
+							<pre style="white-space:pre-wrap;background:#f6f7f7;border:1px solid #dcdcde;padding:8px 12px;margin:0;max-width:40em"><?php echo esc_html( $preview ); ?></pre>
+						<?php endif; ?>
+					</td>
+				</tr>
+			<?php endforeach; ?>
+		</table>
+		<?php submit_button( 'ひな形を保存' ); ?>
+	</form>
+	<?php
 }
 
 function dsp_render_tab_log( $s ) {

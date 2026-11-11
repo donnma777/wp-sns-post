@@ -142,17 +142,21 @@ function dsp_run( $post_id ) {
 			$r
 		);
 
+		// 送り先のひな形で本文を作る
+		$service_content         = $content;
+		$service_content['text'] = dsp_render_text( $service, $content, $s );
+
 		if ( ! empty( $s['dry_run'] ) ) {
 			$results[ $service ] = array(
 				'status'  => 'dry_run',
-				'message' => 'テストモードなので送っていません：' . dsp_trim( $content['text'], 60 ),
+				'message' => 'テストモードなので送っていません：' . dsp_trim( str_replace( "\n", ' / ', $service_content['text'] ), 120 ),
 				'time'    => time(),
 			);
 			dsp_log( $post_id, $service, $results[ $service ]['message'] );
 			continue;
 		}
 
-		$out = call_user_func( 'dsp_' . $service . '_post', $content, $s, $r['state'] );
+		$out = call_user_func( 'dsp_' . $service . '_post', $service_content, $s, $r['state'] );
 
 		if ( 'success' === $out['status'] ) {
 			$results[ $service ] = array(

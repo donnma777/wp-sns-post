@@ -135,7 +135,8 @@ function dsp_x_test( $s ) {
 }
 
 function dsp_x_post( $content, $s, $state ) {
-	$text = dsp_x_trim( $content['text'], DSP_X_MAX - 1 - DSP_X_URL_LENGTH ) . "\n" . $content['url'];
+	// 本文はひな形で作ってある（初めの形は「{message} 改行 {url}」）
+	$text = dsp_x_trim( $content['text'], DSP_X_MAX );
 	$url  = DSP_X_API . '/tweets';
 
 	list( $code, $data ) = dsp_http(

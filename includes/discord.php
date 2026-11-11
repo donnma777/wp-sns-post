@@ -125,11 +125,7 @@ function dsp_discord_send( $message, $channel ) {
  */
 function dsp_discord_post( $content, $s, $state ) {
 	$done = isset( $state['done'] ) ? (array) $state['done'] : array();
-	if ( ! empty( $content['custom'] ) ) {
-		$message = $content['text'] . "\n" . $content['url'];
-	} else {
-		$message = "新しい記事が公開されました！\n**" . $content['title'] . "**\n" . $content['url'];
-	}
+	$message = $content['text']; // ひな形で作ってある
 
 	$errors = array();
 	foreach ( dsp_discord_urls( 'post', $s ) as $url ) {
@@ -205,7 +201,17 @@ function dsp_discord_on_form( $form_title, $fields ) {
 			? sprintf( "**%s**:\n%s", $label, $value )
 			: sprintf( '**%s**: %s', $label, $value );
 	}
-	dsp_discord_send( sprintf( "フォームが送信されました。(%s)\n%s", $form_title, implode( "\n", $lines ) ), 'form' );
+	dsp_discord_send(
+		dsp_fill_template(
+			dsp_template( 'discord_form' ),
+			array(
+				'{form}'   => $form_title,
+				'{fields}' => implode( "\n", $lines ),
+				'{site}'   => wp_specialchars_decode( get_bloginfo( 'name' ), ENT_QUOTES ),
+			)
+		),
+		'form'
+	);
 }
 add_action( 'dsp_form_submitted', 'dsp_discord_on_form', 10, 2 );
 
@@ -221,13 +227,16 @@ function dsp_discord_on_comment( $comment_id, $comment ) {
 		return;
 	}
 	dsp_discord_send(
-		sprintf(
-			"新しいコメントが投稿されました。(%s)\n投稿: %s\n投稿者: %s\n%s\n\n%s",
-			'1' === (string) $comment->comment_approved ? '承認済み' : '承認待ち',
-			wp_specialchars_decode( get_the_title( $post ), ENT_QUOTES ),
-			$comment->comment_author,
-			get_comment_link( $comment ),
-			wp_strip_all_tags( $comment->comment_content )
+		dsp_fill_template(
+			dsp_template( 'discord_comment' ),
+			array(
+				'{status}'  => '1' === (string) $comment->comment_approved ? '承認済み' : '承認待ち',
+				'{title}'   => wp_specialchars_decode( get_the_title( $post ), ENT_QUOTES ),
+				'{author}'  => $comment->comment_author,
+				'{url}'     => get_comment_link( $comment ),
+				'{comment}' => wp_strip_all_tags( $comment->comment_content ),
+				'{site}'    => wp_specialchars_decode( get_bloginfo( 'name' ), ENT_QUOTES ),
+			)
 		),
 		'comment'
 	);

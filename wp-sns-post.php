@@ -2,7 +2,7 @@
 /**
  * Plugin Name: SNS Post
  * Description: 記事を公開したら、Bluesky・Threads・X・Facebook ページ・Discord へ自動で投稿します。フォームの送信やコメントも Discord に知らせます。外部サービスを通さず、サイトから各 SNS へ直接送ります。
- * Version: 1.3.0
+ * Version: 1.4.0
  * Author: donnma
  * Author URI: https://donnma.com/
  * Plugin URI: https://github.com/donnma777/wp-sns-post
@@ -15,7 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'DSP_VERSION', '1.3.0' );
+define( 'DSP_VERSION', '1.4.0' );
 define( 'DSP_FILE', __FILE__ );
 define( 'DSP_URL', plugin_dir_url( __FILE__ ) );
 
@@ -36,6 +36,7 @@ if ( ! defined( 'DSP_BLUESKY_SERVICE' ) ) {
 }
 
 require __DIR__ . '/includes/common.php';
+require __DIR__ . '/includes/template.php';
 require __DIR__ . '/includes/bluesky.php';
 require __DIR__ . '/includes/threads.php';
 require __DIR__ . '/includes/x.php';

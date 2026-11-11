@@ -53,6 +53,14 @@ function dsp_default_settings() {
 		'discord_webhook_form'    => '',
 		'discord_webhook_comment' => '',
 		'discord_webhook_alert'   => '',
+		// ひな形（空なら dsp_default_templates() の形）
+		'template_bluesky'         => '',
+		'template_threads'         => '',
+		'template_x'               => '',
+		'template_facebook'        => '',
+		'template_discord'         => '',
+		'template_discord_form'    => '',
+		'template_discord_comment' => '',
 	);
 }
 

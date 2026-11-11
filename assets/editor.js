@@ -102,7 +102,7 @@
 				rows: 6,
 				value: message,
 				placeholder: post.title,
-				help: '空なら記事のタイトルを投稿します。記事のリンクはカードで付くので、本文に書かなくて大丈夫です。' +
+				help: '空なら記事のタイトル。送り先ごとのひな形（設定 → SNS 投稿）の {message} に入ります。記事のリンクはカードで付くので、本文に書かなくて大丈夫です。' +
 					'（' + len + ' 文字）' + ( over.length ? ' ' + over.join( '、' ) : '' ),
 				onChange: function ( v ) {
 					editPost( { meta: { _dsp_message: v } } );
