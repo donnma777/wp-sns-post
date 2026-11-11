@@ -77,6 +77,7 @@ function dsp_build_content( $post ) {
 		array(
 			'post_id'     => $post->ID,
 			'text'        => '' !== $message ? $message : $title,
+			'custom'      => '' !== $message,
 			'title'       => $title,
 			'url'         => get_permalink( $post ),
 			'description' => $description,
@@ -159,7 +160,7 @@ function dsp_run( $post_id ) {
 				'url'    => $out['url'],
 				'time'   => time(),
 			);
-			dsp_log( $post_id, $service, '投稿しました ' . $out['url'] );
+			dsp_log( $post_id, $service, '' !== $out['url'] ? '投稿しました ' . $out['url'] : '送りました' );
 		} elseif ( 'pending' === $out['status'] ) {
 			$r['status'] = 'pending';
 			$r['state']  = $out['state'];
@@ -231,7 +232,7 @@ function dsp_send_now_url( $post_id, $service ) {
 }
 
 /**
- * 毎日：Threads のトークンを延ばす。
+ * 毎日：Threads のトークンを延ばす。延ばせなくなったら（前は延ばせていたなら）Discord に知らせる。
  */
 function dsp_schedule_daily() {
 	if ( ! wp_next_scheduled( 'dsp_daily' ) ) {
@@ -241,6 +242,20 @@ function dsp_schedule_daily() {
 add_action( 'admin_init', 'dsp_schedule_daily' );
 
 function dsp_daily() {
-	dsp_threads_refresh();
+	$before = dsp_settings();
+	$result = dsp_threads_refresh();
+	if ( is_wp_error( $result ) && '' !== $before['threads_token'] && '' === $before['threads_refresh_error'] ) {
+		dsp_discord_send(
+			sprintf(
+				"SNS 投稿：%s
+期限は %s ごろです。設定画面の「Threads にログインしてつなぎ直す」で直ります。
+%s",
+				$result->get_error_message(),
+				wp_date( 'Y-m-d', (int) $before['threads_token_expires'] ),
+				admin_url( 'options-general.php?page=dsp-settings' )
+			),
+			'alert'
+		);
+	}
 }
 add_action( 'dsp_daily', 'dsp_daily' );

@@ -70,6 +70,31 @@ function dsp_handle_save() {
 }
 add_action( 'admin_post_dsp_save', 'dsp_handle_save' );
 
+/**
+ * Discord の Webhook。画面では隠して出すので、隠したままの行は前の値に戻す。
+ */
+function dsp_handle_discord_save() {
+	dsp_check_request( 'dsp_discord_save' );
+	$old     = dsp_stored_settings();
+	$changes = array();
+	$keys    = array_merge( array( 'discord_webhook' ), array_map( function ( $c ) {
+		return 'discord_webhook_' . $c;
+	}, array_keys( dsp_discord_channels() ) ) );
+	foreach ( $keys as $key ) {
+		$raw = isset( $_POST[ $key ] ) ? sanitize_textarea_field( wp_unslash( $_POST[ $key ] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Missing
+		$value = dsp_discord_unmask( $raw, $old[ $key ] );
+		if ( is_wp_error( $value ) ) {
+			dsp_flash( $value );
+			dsp_redirect_back();
+		}
+		$changes[ $key ] = $value;
+	}
+	dsp_update_settings( $changes );
+	dsp_flash( '' );
+	dsp_redirect_back();
+}
+add_action( 'admin_post_dsp_discord_save', 'dsp_handle_discord_save' );
+
 function dsp_handle_threads_connect() {
 	dsp_check_request( 'dsp_threads_connect' );
 	$token = dsp_post_value( 'threads_token' );
@@ -110,6 +135,9 @@ function dsp_handle_action() {
 			break;
 		case 'test_facebook':
 			$result = dsp_connected( 'facebook', $s ) ? dsp_facebook_test( $s ) : new WP_Error( 'dsp', 'Facebook ページとつながっていません。' );
+			break;
+		case 'test_discord':
+			$result = dsp_discord_test( $s );
 			break;
 		case 'refresh_threads':
 			$result = dsp_threads_refresh( true );
@@ -265,7 +293,7 @@ function dsp_render_settings_page() {
 			<div class="notice notice-<?php echo esc_attr( $notice[0] ); ?> is-dismissible"><p><?php echo esc_html( $notice[1] ); ?></p></div>
 		<?php endif; ?>
 
-		<p>記事を公開すると、約1分後に下の SNS へ投稿します。投稿文は記事の編集画面の右側「SNS 投稿」で記事ごとに書けます（空なら記事のタイトル）。</p>
+		<p>記事を公開すると、約1分後に下の SNS へ投稿します。投稿文は記事の編集画面の右側「SNS 投稿」で記事ごとに書けます（空なら記事のタイトル）。フォームの送信やコメントは、下の「Discord」の Webhook へ知らせます。</p>
 
 
 		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
@@ -414,11 +442,53 @@ function dsp_render_settings_page() {
 		</details>
 
 		<hr />
+		<h2>Discord</h2>
+		<p class="description">チャンネルの設定 → 連携サービス → ウェブフック で作った URL を入れます。1行に1つ書けば、複数のチャンネルへ送ります。用途ごとの欄が空なら「ふだんの送り先」へ送ります。保存した URL は、末尾の4文字だけ見せています。</p>
+		<?php if ( defined( 'DSP_DISCORD_WEBHOOK_URL' ) && '' !== (string) DSP_DISCORD_WEBHOOK_URL ) : ?>
+			<p>wp-config.php の DSP_DISCORD_WEBHOOK_URL を、すべての用途で使っています。</p>
+		<?php else : ?>
+			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+				<?php wp_nonce_field( 'dsp_discord_save' ); ?>
+				<input type="hidden" name="action" value="dsp_discord_save" />
+				<table class="form-table" role="presentation">
+					<?php foreach ( array_merge( array( '' => 'ふだんの送り先' ), dsp_discord_channels() ) as $channel => $label ) : ?>
+						<?php $key = '' === $channel ? 'discord_webhook' : 'discord_webhook_' . $channel; ?>
+						<tr>
+							<th scope="row"><label for="dsp-<?php echo esc_attr( $key ); ?>"><?php echo esc_html( $label ); ?></label></th>
+							<td>
+								<textarea id="dsp-<?php echo esc_attr( $key ); ?>" name="<?php echo esc_attr( $key ); ?>" class="large-text code" rows="2" autocomplete="off" spellcheck="false"
+									<?php if ( '' !== $channel ) : ?>placeholder="空ならふだんの送り先"<?php endif; ?>
+								><?php echo esc_textarea( implode( "
+", array_map( 'dsp_discord_mask', dsp_discord_lines( $s[ $key ] ) ) ) ); ?></textarea>
+								<?php if ( 'post' === $channel ) : ?>
+									<p class="description">記事の公開は、上の「送り先」で Discord にチェックを入れたときだけ送ります（テストモードの間は送りません）。</p>
+								<?php elseif ( 'form' === $channel ) : ?>
+									<p class="description">フォームのプラグインが <code>do_action( 'dsp_form_submitted', 'フォーム名', array( '項目名' => '値' ) )</code> を呼んだときに送ります。</p>
+								<?php endif; ?>
+							</td>
+						</tr>
+					<?php endforeach; ?>
+				</table>
+				<?php submit_button( 'Discord の設定を保存' ); ?>
+			</form>
+		<?php endif; ?>
+		<?php
+		if ( array_filter( array_map( function ( $c ) use ( $s ) {
+			return dsp_discord_urls( $c, $s );
+		}, array_keys( dsp_discord_channels() ) ) ) ) {
+			dsp_action_button( 'test_discord', 'Discord にテスト通知を送る' );
+		}
+		?>
+
+		<hr />
 		<h2>確かめる・切る</h2>
 		<p>「確かめる」はつながるかを見るだけで、投稿はしません。</p>
 		<p>
 			<?php
 			foreach ( $services as $service => $label ) {
+				if ( 'discord' === $service ) {
+					continue;
+				}
 				if ( dsp_connected( $service, $s ) ) {
 					dsp_action_button( 'test_' . $service, $label . ' を確かめる' );
 				}
@@ -431,7 +501,7 @@ function dsp_render_settings_page() {
 		<p>
 			<?php
 			foreach ( $services as $service => $label ) {
-				if ( dsp_connected( $service, $s ) && ! ( 'bluesky' === $service && dsp_from_constant( 'bluesky_app_password' ) ) && ! ( 'facebook' === $service && dsp_from_constant( 'facebook_page_token' ) ) ) {
+				if ( 'discord' !== $service && dsp_connected( $service, $s ) && ! ( 'bluesky' === $service && dsp_from_constant( 'bluesky_app_password' ) ) && ! ( 'facebook' === $service && dsp_from_constant( 'facebook_page_token' ) ) ) {
 					dsp_action_button( 'disconnect_' . $service, $label . ' のトークンを消す', 'delete', $label . ' のトークンを消しますか？' );
 				}
 			}

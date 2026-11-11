@@ -1,6 +1,6 @@
 # SNS Post
 
-記事を公開したら、Bluesky・Threads・Facebook ページへ自動で投稿する WordPress プラグインです。
+記事を公開したら、Bluesky・Threads・Facebook ページ・Discord へ自動で投稿する WordPress プラグインです。フォームの送信やコメントも Discord に知らせます。
 
 仲介するサービスを通さず、サイトから各 SNS の API へ直接送ります。サイトのデータや SNS の権限を、ほかのサービスに預けずに済みます。
 
@@ -17,8 +17,35 @@
 - 「この記事は SNS に投稿しない」も選べます
 - 公開から約1分後に WP-Cron で送ります。更新しただけでは送りません
 - 失敗したら10分おきに3回まで試します。だめなら記事の画面に理由が出て、「今すぐ送る」でやり直せます
-- [Discord Post Notify](https://github.com/donnma777/discord-post-notify) が入っていれば、失敗を Discord に知らせます
+- あきらめた投稿や、Threads のトークンを延ばせなくなったことを Discord に知らせます
 - テストモードでは、実際には送らずにログに残すだけにできます
+
+## Discord
+
+チャンネルの「設定 → 連携サービス → ウェブフック」で作った URL を、設定画面の「Discord」に入れます。
+
+| 用途 | いつ送るか |
+|---|---|
+| 記事の公開 | 送り先で Discord にチェックを入れたとき。ほかの SNS と同じく、公開から約1分後に送る（テストモードの間は送らない） |
+| フォームの送信 | フォームのプラグインが下のフックを呼んだとき |
+| コメント | コメントが入ったとき（スパム・ゴミ箱は除く） |
+| SNS 投稿の失敗・トークンの期限 | 投稿をあきらめたとき、Threads のトークンを延ばせなくなったとき |
+
+- 用途ごとに送り先を分けられます。空の用途は「ふだんの送り先」へ送ります
+- 1行に1つ書けば、複数のチャンネルへ送ります
+- 本文に `@everyone` / `@here` / `<@ユーザーID>` があっても、メンションの通知は飛びません
+- 保存した URL は、画面では末尾の4文字だけ見せます
+
+### フォームから知らせる
+
+送信が済んだところで次のフックを呼ぶと、「フォームの送信」の送り先へ送ります。[Contact Inbox](https://github.com/donnma777/wp-contact-inbox) は対応済みです。
+
+```php
+do_action( 'dsp_form_submitted', 'お問い合わせ', array(
+	'お名前'         => $name,
+	'メッセージ本文' => $body,
+) );
+```
 
 ## インストール
 
@@ -77,6 +104,12 @@ define( 'DSP_FACEBOOK_PAGE_ID', '123456789' );
 define( 'DSP_FACEBOOK_PAGE_TOKEN', 'EAAB...' );
 ```
 
+Discord の Webhook も書けます（すべての用途でこの URL を使います）。
+
+```php
+define( 'DSP_DISCORD_WEBHOOK_URL', 'https://discord.com/api/webhooks/xxxx/yyyy' );
+```
+
 Threads のトークンは自動で延ばすため、データベースに置きます。アプリシークレットも定数で書けます（書けば、つなぐときに入れなくて済みます）。
 
 ```php
@@ -90,6 +123,10 @@ define( 'DSP_THREADS_APP_SECRET', '...' ); // Threads 用
 |---|---|
 | `dsp_post_types` | 送る投稿タイプ（初めは `post` だけ） |
 | `dsp_content` | 投稿の中身（本文・タイトル・URL・説明文）を変える |
+
+| アクション | 用途 |
+|---|---|
+| `dsp_form_submitted` | フォームの送信を Discord に知らせる（フォーム名, 項目名 => 値 の配列） |
 
 ## 動作環境
 

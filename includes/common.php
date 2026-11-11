@@ -12,6 +12,7 @@ function dsp_services() {
 		'bluesky'  => 'Bluesky',
 		'threads'  => 'Threads',
 		'facebook' => 'Facebook',
+		'discord'  => 'Discord',
 	);
 }
 
@@ -22,6 +23,7 @@ function dsp_default_settings() {
 		'enabled_bluesky'         => 0,
 		'enabled_threads'         => 0,
 		'enabled_facebook'        => 0,
+		'enabled_discord'         => 0,
 		'bluesky_identifier'      => '',
 		'bluesky_app_password'    => '',
 		'threads_token'           => '',
@@ -37,6 +39,12 @@ function dsp_default_settings() {
 		'meta_app_id'             => '',
 		'threads_app_id'          => '',
 		'facebook_config_id'      => '',
+		// Discord の Webhook（改行区切り）。用途ごとの欄が空なら discord_webhook へ送る
+		'discord_webhook'         => '',
+		'discord_webhook_post'    => '',
+		'discord_webhook_form'    => '',
+		'discord_webhook_comment' => '',
+		'discord_webhook_alert'   => '',
 	);
 }
 
@@ -104,6 +112,8 @@ function dsp_connected( $service, $s = null ) {
 			return '' !== $s['threads_token'] && '' !== $s['threads_user_id'];
 		case 'facebook':
 			return '' !== $s['facebook_page_id'] && '' !== $s['facebook_page_token'];
+		case 'discord':
+			return (bool) dsp_discord_urls( 'post', $s );
 	}
 	return false;
 }
@@ -280,20 +290,20 @@ function dsp_card_image( $post_id, $max_bytes ) {
 }
 
 /**
- * Discord Post Notify が入っていれば、失敗を Discord に知らせる。
+ * 投稿をあきらめたことを Discord に知らせる（お知らせの Webhook があれば）。
  */
 function dsp_notify_failure( $post_id, $label, $message ) {
-	if ( ! function_exists( 'dpn_discord_send_message' ) ) {
-		return;
-	}
-	dpn_discord_send_message(
+	dsp_discord_send(
 		sprintf(
-			"SNS Post：%s への投稿に失敗しました\n%s\n%s\n%s",
+			"SNS 投稿：%s への投稿に失敗しました
+%s
+%s
+%s",
 			$label,
 			wp_specialchars_decode( get_the_title( $post_id ), ENT_QUOTES ),
 			$message,
 			admin_url( 'post.php?post=' . (int) $post_id . '&action=edit' )
 		),
-		'post'
+		'alert'
 	);
 }
