@@ -30,6 +30,7 @@
 			return {
 				post: e.getCurrentPostId(),
 				message: ( e.getEditedPostAttribute( 'meta' ) || {} )._dsp_message || '',
+				no_hashtags: ( e.getEditedPostAttribute( 'meta' ) || {} )._dsp_no_hashtags || [],
 				title: e.getEditedPostAttribute( 'title' ) || '',
 				excerpt: e.getEditedPostAttribute( 'excerpt' ) || '',
 				categories: e.getEditedPostAttribute( 'categories' ) || [],
@@ -162,6 +163,31 @@
 					editPost( { meta: { _dsp_message: v } } );
 				},
 			} ) );
+			var tagged = data.services.filter( function ( s ) {
+				return s.hashtags;
+			} );
+			if ( tagged.length ) {
+				var noTags = post.meta._dsp_no_hashtags || [];
+				children.push( el( 'fieldset', { key: 'hashtags', style: { margin: '0 0 8px' } },
+					el( 'legend', { style: { fontSize: '11px', fontWeight: 500, textTransform: 'uppercase', marginBottom: '4px' } }, 'ハッシュタグを付ける' ),
+					tagged.map( function ( s ) {
+						return el( C.CheckboxControl, {
+							key: s.id,
+							label: s.label,
+							checked: noTags.indexOf( s.id ) === -1,
+							onChange: function ( v ) {
+								var next = noTags.filter( function ( id ) {
+									return id !== s.id;
+								} );
+								if ( ! v ) {
+									next.push( s.id );
+								}
+								editPost( { meta: { _dsp_no_hashtags: next } } );
+							},
+						} );
+					} )
+				) );
+			}
 			children.push( el( 'p', { key: 'to', style: { color: '#757575', margin: '0 0 8px' } },
 				'送り先：' + data.services.map( function ( s ) { return s.label; } ).join( '・' ) +
 				'（公開から約1分後）' + ( data.dryRun ? '。今はテストモードなので実際には送りません' : '' ) ) );

@@ -25,6 +25,22 @@ function dsp_register_meta() {
 		);
 		register_post_meta(
 			$post_type,
+			'_dsp_no_hashtags',
+			array(
+				'type'          => 'array',
+				'single'        => true,
+				'default'       => array(),
+				'show_in_rest'  => array(
+					'schema' => array(
+						'type'  => 'array',
+						'items' => array( 'type' => 'string' ),
+					),
+				),
+				'auth_callback' => $auth,
+			)
+		);
+		register_post_meta(
+			$post_type,
 			'_dsp_skip',
 			array(
 				'type'          => 'boolean',
@@ -76,6 +92,9 @@ function dsp_rest_preview( $request ) {
 	}
 	$message = is_string( $request['message'] ) ? $request['message'] : null;
 	$content = dsp_build_content( $post, $message );
+	if ( is_array( $request['no_hashtags'] ) ) {
+		$content['no_hashtags'] = array_map( 'strval', $request['no_hashtags'] );
+	}
 	foreach ( array( 'categories' => 'category_ids', 'tags' => 'tag_ids' ) as $param => $key ) {
 		if ( is_array( $request[ $param ] ) ) {
 			$content[ $key ] = array_map( 'intval', $request[ $param ] );
@@ -121,10 +140,13 @@ function dsp_enqueue_editor() {
 		if ( ! dsp_ready( $service, $s ) ) {
 			continue;
 		}
+		// ハッシュタグが付く送り先だけ、記事ごとに外すチェックを出す
+		$template = dsp_template( $service, $s );
 		$services[] = array(
-			'id'    => $service,
-			'label' => $label,
-			'send'  => $post_id ? dsp_send_now_url( $post_id, $service ) : '',
+			'id'       => $service,
+			'label'    => $label,
+			'send'     => $post_id ? dsp_send_now_url( $post_id, $service ) : '',
+			'hashtags' => false !== strpos( $template, '{tags}' ) || ( false !== strpos( $template, '{hashtags}' ) && '' !== trim( $s[ 'hashtags_' . $service ] ) ),
 		);
 	}
 

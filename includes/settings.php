@@ -101,7 +101,8 @@ function dsp_handle_save() {
 	} elseif ( 'templates' === $section ) {
 		$service = isset( $_POST['service'] ) ? sanitize_key( wp_unslash( $_POST['service'] ) ) : '';
 		if ( isset( dsp_services()[ $service ] ) ) {
-			$defaults = dsp_default_templates();
+			$changes[ 'hashtags_' . $service ] = dsp_post_value( 'hashtags_' . $service );
+			$defaults                          = dsp_default_templates();
 			foreach ( array_keys( dsp_template_kinds( $service ) ) as $kind ) {
 				$value = isset( $_POST[ 'template_' . $kind ] ) ? trim( str_replace( "\r\n", "\n", sanitize_textarea_field( wp_unslash( $_POST[ 'template_' . $kind ] ) ) ) ) : '';
 				// 初めの形と同じなら空で持つ（あとで初めの形が変わったら、それに合わせる）
@@ -793,6 +794,19 @@ function dsp_render_templates( $service, $s ) {
 		<input type="hidden" name="section" value="templates" />
 		<input type="hidden" name="service" value="<?php echo esc_attr( $service ); ?>" />
 		<table class="form-table" role="presentation">
+			<tr>
+				<th scope="row"><label for="dsp-hashtags-<?php echo esc_attr( $service ); ?>">ハッシュタグ</label></th>
+				<td>
+					<input type="text" id="dsp-hashtags-<?php echo esc_attr( $service ); ?>" name="hashtags_<?php echo esc_attr( $service ); ?>" class="large-text" autocomplete="off"
+						value="<?php echo esc_attr( $s[ 'hashtags_' . $service ] ); ?>" placeholder="#サイト名 {tags}" />
+					<p class="description">
+						ひな形の <code>{hashtags}</code> に入ります。<code>{tags}</code> と書くと記事のタグも入ります。記事の編集画面で、記事ごとに外せます。
+						<?php if ( '' !== trim( $s[ 'hashtags_' . $service ] ) && false === strpos( dsp_template( $service, $s ), '{hashtags}' ) ) : ?>
+							<strong style="color:#cc1818">下のひな形に {hashtags} がないので、付きません。</strong>
+						<?php endif; ?>
+					</p>
+				</td>
+			</tr>
 			<?php foreach ( dsp_template_kinds( $service ) as $kind => $label ) : ?>
 				<?php
 				$preview = dsp_template_preview( $kind, $s );

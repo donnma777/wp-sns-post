@@ -34,13 +34,16 @@
 | `{url}` | 記事の URL |
 | `{excerpt}` | 記事の説明文（メタディスクリプション → 抜粋 → 本文の頭） |
 | `{categories}` | カテゴリー（「、」区切り） |
+| `{hashtags}` | その送り先の「ハッシュタグ」欄の中身（記事ごとに外せる） |
 | `{tags}` | タグをハッシュタグにしたもの（`#タグ1 #タグ2`） |
 | `{site}` | サイトの名前 |
 
-- 初めの形は、Bluesky・Threads・Facebook が `{message}`、X が `{message}` 改行 `{url}`、Discord が「新しい記事が公開されました！」＋太字の `{message}`＋`{url}` です。空にして保存すると初めの形に戻ります
+- 初めの形は、Bluesky・Threads・Facebook が `{message}` 改行 `{hashtags}`、X が `{message}` 改行 `{hashtags}` 改行 `{url}`、Discord が「新しい記事が公開されました！」＋太字の `{message}`＋`{url}` です。空にして保存すると初めの形に戻ります
 - Bluesky・Threads・Facebook は、リンクのカードが付くので `{url}` は要りません
 - 文字数の上限を超えるときは、`{excerpt}`、`{message}` の順に短くします。URL やハッシュタグは削りません
-- 毎回付けるハッシュタグは、ひな形にそのまま書けます（例：`{message}` 改行 `#サイト名`）
+- 各送り先のタブの「ハッシュタグ」欄に、付けるハッシュタグを書きます（例：`#サイト名 {tags}`。`{tags}` で記事のタグも入る）。ひな形の `{hashtags}` に入ります
+- 記事の編集画面の「ハッシュタグを付ける」で、記事ごと・送り先ごとに外せます。外した送り先は `{hashtags}` も `{tags}` も空になります
+- 記事ごとの投稿文は `{message}` に入るだけなので、ひな形にある `{url}` やハッシュタグはそのまま付きます
 - Discord のタブでは、フォームの送信（`{form}`・`{fields}`）とコメント（`{status}`・`{title}`・`{author}`・`{url}`・`{comment}`）の通知文も変えられます
 
 ## Discord

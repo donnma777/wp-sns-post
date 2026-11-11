@@ -61,6 +61,12 @@ function dsp_default_settings() {
 		'template_discord'         => '',
 		'template_discord_form'    => '',
 		'template_discord_comment' => '',
+		// 送り先ごとのハッシュタグ（ひな形の {hashtags}。{tags} で記事のタグも入る）
+		'hashtags_bluesky'         => '',
+		'hashtags_threads'         => '',
+		'hashtags_x'               => '',
+		'hashtags_facebook'        => '',
+		'hashtags_discord'         => '',
 	);
 }
 

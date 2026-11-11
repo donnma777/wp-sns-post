@@ -13,10 +13,10 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 function dsp_default_templates() {
 	return array(
-		'bluesky'         => '{message}',
-		'threads'         => '{message}',
-		'x'               => "{message}\n{url}",
-		'facebook'        => '{message}',
+		'bluesky'         => "{message}\n{hashtags}",
+		'threads'         => "{message}\n{hashtags}",
+		'x'               => "{message}\n{hashtags}\n{url}",
+		'facebook'        => "{message}\n{hashtags}",
 		'discord'         => "新しい記事が公開されました！\n**{message}**\n{url}",
 		'discord_form'    => "フォームが送信されました。({form})\n{fields}",
 		'discord_comment' => "新しいコメントが投稿されました。({status})\n投稿: {title}\n投稿者: {author}\n{url}\n\n{comment}",
@@ -50,9 +50,18 @@ function dsp_template_tags( $kind ) {
 		'{url}'        => '記事の URL',
 		'{excerpt}'    => '記事の説明文（メタディスクリプション・抜粋・本文の頭）',
 		'{categories}' => 'カテゴリー（「、」区切り）',
+		'{hashtags}'   => 'この送り先のハッシュタグ（下の欄。記事ごとに外せる）',
 		'{tags}'       => 'タグをハッシュタグに（#タグ1 #タグ2）',
 		'{site}'       => 'サイトの名前',
 	);
+}
+
+/**
+ * 記事ごとにハッシュタグを外した送り先。
+ */
+function dsp_no_hashtags( $post_id ) {
+	$list = get_post_meta( $post_id, '_dsp_no_hashtags', true );
+	return is_array( $list ) ? array_values( array_filter( array_map( 'strval', $list ) ) ) : array();
 }
 
 function dsp_template( $kind, $s = null ) {
@@ -74,9 +83,29 @@ function dsp_fill_template( $template, $vars ) {
 }
 
 /**
- * 記事の公開の差し込み。
+ * 記事の公開の差し込み。$service を渡すと、その送り先の {hashtags} も入れる。
+ * 記事でハッシュタグを外した送り先は、{hashtags} も {tags} も空にする。
  */
-function dsp_post_vars( $content ) {
+function dsp_post_vars( $content, $service = '', $s = null ) {
+	$vars = dsp_post_vars_base( $content );
+	$off  = '' !== $service && in_array( $service, isset( $content['no_hashtags'] ) ? (array) $content['no_hashtags'] : array(), true );
+	if ( $off ) {
+		$vars['{tags}'] = '';
+	}
+	$vars['{hashtags}'] = '';
+	if ( '' !== $service && ! $off ) {
+		if ( null === $s ) {
+			$s = dsp_settings();
+		}
+		$key = 'hashtags_' . $service;
+		if ( isset( $s[ $key ] ) && '' !== trim( $s[ $key ] ) ) {
+			$vars['{hashtags}'] = trim( preg_replace( '/\s+/u', ' ', strtr( $s[ $key ], array( '{tags}' => $vars['{tags}'] ) ) ) );
+		}
+	}
+	return $vars;
+}
+
+function dsp_post_vars_base( $content ) {
 	$post_id = isset( $content['post_id'] ) ? (int) $content['post_id'] : 0;
 	// プレビューでは、保存前のカテゴリー・タグ（ID の配列）を content に入れて渡す
 	$terms = array(
@@ -169,7 +198,7 @@ function dsp_fit_template( $template, $vars, $limit ) {
  */
 function dsp_preview_text( $service, $content, $s = null ) {
 	$limit = dsp_text_limit( $service );
-	$full  = dsp_fill_template( dsp_template( $service, $s ), dsp_post_vars( $content ) );
+	$full  = dsp_fill_template( dsp_template( $service, $s ), dsp_post_vars( $content, $service, $s ) );
 	$text  = dsp_render_text( $service, $content, $s );
 	if ( $limit ) {
 		$text = 'x' === $service ? dsp_x_trim( $text, $limit[1] ) : dsp_trim( $text, $limit[1] );
@@ -186,6 +215,6 @@ function dsp_preview_text( $service, $content, $s = null ) {
  * その送り先へ送る本文。
  */
 function dsp_render_text( $service, $content, $s = null ) {
-	$text = dsp_fit_template( dsp_template( $service, $s ), dsp_post_vars( $content ), dsp_text_limit( $service ) );
+	$text = dsp_fit_template( dsp_template( $service, $s ), dsp_post_vars( $content, $service, $s ), dsp_text_limit( $service ) );
 	return (string) apply_filters( 'dsp_text', $text, $service, $content );
 }

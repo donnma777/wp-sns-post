@@ -82,6 +82,7 @@ function dsp_build_content( $post, $message = null ) {
 			'title'       => $title,
 			'url'         => get_permalink( $post ),
 			'description' => $description,
+			'no_hashtags' => dsp_no_hashtags( $post->ID ),
 		),
 		$post
 	);
