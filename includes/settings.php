@@ -59,9 +59,7 @@ function dsp_handle_save() {
 	if ( ! dsp_from_constant( 'bluesky_identifier' ) ) {
 		$changes['bluesky_identifier'] = ltrim( dsp_post_value( 'bluesky_identifier' ), '@' );
 	}
-	foreach ( array( 'meta_app_id', 'threads_app_id', 'facebook_config_id' ) as $key ) {
-		$changes[ $key ] = preg_replace( '/\D/', '', dsp_post_value( $key ) );
-	}
+	$changes['facebook_config_id'] = preg_replace( '/\D/', '', dsp_post_value( 'facebook_config_id' ) );
 	$password = dsp_post_value( 'bluesky_app_password' );
 	if ( '' !== $password && ! dsp_from_constant( 'bluesky_app_password' ) ) {
 		$changes['bluesky_app_password'] = $password;
@@ -87,7 +85,7 @@ function dsp_handle_facebook_connect() {
 	$user_token = dsp_post_value( 'facebook_user_token' );
 	$page_id    = dsp_post_value( 'facebook_page_id' );
 	if ( '' === $app_id || '' === $app_secret || '' === $user_token ) {
-		dsp_flash( new WP_Error( 'dsp', 'アプリ ID・アプリシークレット・ユーザーのトークンを入れてください。' ) );
+		dsp_flash( new WP_Error( 'dsp', '手で入れるときは、アプリ ID・アプリシークレット・ユーザーのトークンの3つが要ります。ログインしてつなぐときは、上の「Facebook にログインしてつなぐ」を使ってください。' ) );
 	} else {
 		dsp_flash( dsp_facebook_connect( $app_id, $app_secret, $user_token, $page_id ) );
 	}
@@ -213,18 +211,31 @@ function dsp_oauth_form( $service, $s ) {
 		<?php wp_nonce_field( 'dsp_oauth_start' ); ?>
 		<input type="hidden" name="action" value="dsp_oauth_start" />
 		<input type="hidden" name="service" value="<?php echo esc_attr( $service ); ?>" />
-		<?php if ( '' === dsp_app_id( $service, $s ) ) : ?>
-			<p class="description">上の「Meta アプリ」に <?php echo esc_html( $label ); ?> のアプリ ID を入れて保存すると、ログインしてつなげます。</p>
-		<?php else : ?>
+		<table class="form-table" role="presentation">
+			<tr>
+				<th scope="row"><label for="dsp-<?php echo esc_attr( $service ); ?>-app-id"><?php echo esc_html( $label ); ?> のアプリ ID</label></th>
+				<td>
+					<input type="text" id="dsp-<?php echo esc_attr( $service ); ?>-app-id" name="app_id" class="regular-text" autocomplete="off" value="<?php echo esc_attr( dsp_app_id( $service, $s ) ); ?>" />
+					<p class="description">
+						<?php if ( 'threads' === $service ) : ?>
+							Meta のアプリ → ユースケース「Threads API」の設定 にある「Threads アプリ ID」。
+						<?php else : ?>
+							Meta のアプリ → アプリの設定 → ベーシック の一番上の「アプリ ID」。
+						<?php endif; ?>
+					</p>
+				</td>
+			</tr>
 			<?php if ( '' === dsp_app_secret_constant( $service ) ) : ?>
-				<p>
-					<label><?php echo esc_html( $label ); ?> のアプリシークレット<br />
-						<input type="password" name="app_secret" class="regular-text" autocomplete="new-password" value="" /></label><br />
-					<span class="description">つなぐときに使うだけで、保存しません。</span>
-				</p>
+				<tr>
+					<th scope="row"><label for="dsp-<?php echo esc_attr( $service ); ?>-secret"><?php echo esc_html( $label ); ?> のアプリシークレット</label></th>
+					<td>
+						<input type="password" id="dsp-<?php echo esc_attr( $service ); ?>-secret" name="app_secret" class="regular-text" autocomplete="new-password" value="" />
+						<p class="description">アプリ ID の横（または下）にある app secret。つなぐときに使うだけで、保存しません。</p>
+					</td>
+				</tr>
 			<?php endif; ?>
-			<?php submit_button( $label . ( $connected ? ' にログインしてつなぎ直す' : ' にログインしてつなぐ' ), $connected ? 'secondary' : 'primary', 'submit', false ); ?>
-		<?php endif; ?>
+		</table>
+		<?php submit_button( $label . ( $connected ? ' にログインしてつなぎ直す' : ' にログインしてつなぐ' ), $connected ? 'secondary' : 'primary' ); ?>
 	</form>
 	<?php
 }
@@ -307,13 +318,7 @@ function dsp_render_settings_page() {
 				<tr>
 					<th scope="row">Meta アプリ</th>
 					<td>
-						<p class="description" style="margin-top:0">Threads と Facebook に「ログインしてつなぐ」ときに使います。1つのアプリに「Threads API」と「ページの管理」の2つのユースケースを入れ、アプリ設定 → ベーシック にある2組の ID を入れます。</p>
-						<p>
-							<label>Facebook のアプリ ID<br /><input type="text" name="meta_app_id" class="regular-text" autocomplete="off" value="<?php echo esc_attr( $s['meta_app_id'] ); ?>" /></label>
-						</p>
-						<p>
-							<label>Threads のアプリ ID<br /><input type="text" name="threads_app_id" class="regular-text" autocomplete="off" value="<?php echo esc_attr( $s['threads_app_id'] ); ?>" /></label>
-						</p>
+						<p class="description" style="margin-top:0">Threads と Facebook に「ログインしてつなぐ」ときに使います。1つのアプリに「Threads API」と「ページの管理」の2つのユースケースを入れます。アプリ ID とシークレットは、下の Threads・Facebook の欄で入れます。</p>
 						<p>
 							<label>Facebook ログイン for Business の設定 ID（任意）<br /><input type="text" name="facebook_config_id" class="regular-text" autocomplete="off" value="<?php echo esc_attr( $s['facebook_config_id'] ); ?>" /></label><br />
 							<span class="description">ログインで「権限が無効」などと出るときだけ入れます。空なら権限（<?php echo esc_html( str_replace( ',', '・', DSP_FACEBOOK_SCOPES ) ); ?>）を並べて頼みます。</span>

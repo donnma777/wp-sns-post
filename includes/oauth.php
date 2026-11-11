@@ -44,7 +44,7 @@ function dsp_oauth_start( $service, $secret ) {
 	$s      = dsp_settings();
 	$app_id = dsp_app_id( $service, $s );
 	if ( '' === $app_id ) {
-		return new WP_Error( 'dsp', ( 'threads' === $service ? 'Threads' : 'Facebook' ) . ' のアプリ ID を入れて保存してください。' );
+		return new WP_Error( 'dsp', ( 'threads' === $service ? 'Threads' : 'Facebook' ) . ' のアプリ ID を入れてください。' );
 	}
 	if ( '' === dsp_app_secret_constant( $service ) && '' === $secret ) {
 		return new WP_Error( 'dsp', 'アプリシークレットを入れてください。' );
@@ -227,7 +227,11 @@ function dsp_handle_oauth_start() {
 	check_admin_referer( 'dsp_oauth_start' );
 	$service = isset( $_POST['service'] ) && 'threads' === $_POST['service'] ? 'threads' : 'facebook';
 	$secret  = isset( $_POST['app_secret'] ) ? trim( sanitize_text_field( wp_unslash( $_POST['app_secret'] ) ) ) : '';
-	$url     = dsp_oauth_start( $service, $secret );
+	if ( isset( $_POST['app_id'] ) ) {
+		$app_id = preg_replace( '/\D/', '', sanitize_text_field( wp_unslash( $_POST['app_id'] ) ) );
+		dsp_update_settings( array( ( 'threads' === $service ? 'threads_app_id' : 'meta_app_id' ) => $app_id ) );
+	}
+	$url = dsp_oauth_start( $service, $secret );
 	if ( is_wp_error( $url ) ) {
 		dsp_flash( $url );
 		dsp_redirect_back();
