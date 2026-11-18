@@ -143,9 +143,10 @@ function dsp_handle_discord_save() {
 	dsp_check_request( 'dsp_discord_save' );
 	$old     = dsp_stored_settings();
 	$changes = array();
-	$keys    = array_merge( array( 'discord_webhook' ), array_map( function ( $c ) {
-		return 'discord_webhook_' . $c;
-	}, array_keys( dsp_discord_channels() ) ) );
+	$keys    = array();
+	foreach ( dsp_discord_form_channels() as $channel => $label ) {
+		$keys[] = '' === $channel ? 'discord_webhook' : 'discord_webhook_' . $channel;
+	}
 	foreach ( $keys as $key ) {
 		$raw = isset( $_POST[ $key ] ) ? sanitize_textarea_field( wp_unslash( $_POST[ $key ] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Missing
 		$value = dsp_discord_unmask( $raw, $old[ $key ] );
@@ -684,29 +685,48 @@ function dsp_render_service_buttons( $service, $s ) {
 	echo '</p><p class="description">「確かめる」はつながるかを見るだけで、投稿はしません。' . ( 'x' === $service ? 'X は確かめるたびに、読み取りの料金が少しかかります。' : '' ) . '</p>';
 }
 
+/**
+ * 設定画面に出す欄（'' はふだんの送り先）。定数を使っているときは、定数を使わない用途だけ。
+ */
+function dsp_discord_form_channels() {
+	$channels = array_merge( array( '' => 'ふだんの送り先' ), dsp_discord_channels() );
+	if ( dsp_discord_from_constant() ) {
+		$channels = array_filter(
+			$channels,
+			function ( $c ) {
+				return '' !== $c && dsp_discord_own_only( $c );
+			},
+			ARRAY_FILTER_USE_KEY
+		);
+	}
+	return $channels;
+}
+
 function dsp_render_tab_discord( $s ) {
 	?>
-	<p>チャンネルの設定 → 連携サービス → ウェブフック で作った URL を入れます。1行に1つ書けば、複数のチャンネルへ送ります。用途ごとの欄が空なら「ふだんの送り先」へ送ります。保存した URL は、末尾の4文字だけ見せています。</p>
-	<?php if ( defined( 'DSP_DISCORD_WEBHOOK_URL' ) && '' !== (string) DSP_DISCORD_WEBHOOK_URL ) : ?>
-		<p>wp-config.php の DSP_DISCORD_WEBHOOK_URL を、すべての用途で使っています。</p>
-	<?php else : ?>
+	<p>チャンネルの設定 → 連携サービス → ウェブフック で作った URL を入れます。1行に1つ書けば、複数のチャンネルへ送ります。用途ごとの欄が空なら「ふだんの送り先」へ送ります（ログインは除く）。保存した URL は、末尾の4文字だけ見せています。</p>
+	<?php if ( dsp_discord_from_constant() ) : ?>
+		<p>wp-config.php の DSP_DISCORD_WEBHOOK_URL を、ログイン以外のすべての用途で使っています。</p>
+	<?php endif; ?>
 		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
 			<?php wp_nonce_field( 'dsp_discord_save' ); ?>
 			<?php dsp_tab_field(); ?>
 			<input type="hidden" name="action" value="dsp_discord_save" />
 			<table class="form-table" role="presentation">
-				<?php foreach ( array_merge( array( '' => 'ふだんの送り先' ), dsp_discord_channels() ) as $channel => $label ) : ?>
+				<?php foreach ( dsp_discord_form_channels() as $channel => $label ) : ?>
 					<?php $key = '' === $channel ? 'discord_webhook' : 'discord_webhook_' . $channel; ?>
 					<tr>
 						<th scope="row"><label for="dsp-<?php echo esc_attr( $key ); ?>"><?php echo esc_html( $label ); ?></label></th>
 						<td>
 							<textarea id="dsp-<?php echo esc_attr( $key ); ?>" name="<?php echo esc_attr( $key ); ?>" class="large-text code" rows="2" autocomplete="off" spellcheck="false"
-								<?php if ( '' !== $channel ) : ?>placeholder="空ならふだんの送り先"<?php endif; ?>
+								<?php if ( '' !== $channel ) : ?>placeholder="<?php echo dsp_discord_own_only( $channel ) ? '空なら送らない' : '空ならふだんの送り先'; ?>"<?php endif; ?>
 							><?php echo esc_textarea( implode( "\n", array_map( 'dsp_discord_mask', dsp_discord_lines( $s[ $key ] ) ) ) ); ?></textarea>
 							<?php if ( 'post' === $channel ) : ?>
 								<p class="description">記事の公開は、「基本」の送り先で Discord にチェックを入れたときだけ送ります（テストモードの間は送りません）。</p>
 							<?php elseif ( 'form' === $channel ) : ?>
 								<p class="description">フォームのプラグインが <code>do_action( 'dsp_form_submitted', 'フォーム名', array( '項目名' => '値' ) )</code> を呼んだときに送ります。</p>
+							<?php elseif ( 'login' === $channel ) : ?>
+								<p class="description">ログイン画面からだれかが入ったときに、ユーザー・権限・IP・ブラウザを送ります。IP が載るので、関係者だけのチャンネルにしてください。この欄が空なら送りません。</p>
 							<?php endif; ?>
 						</td>
 					</tr>
@@ -714,7 +734,6 @@ function dsp_render_tab_discord( $s ) {
 			</table>
 			<?php submit_button( '保存' ); ?>
 		</form>
-	<?php endif; ?>
 	<?php
 	$used = array_filter(
 		array_map(

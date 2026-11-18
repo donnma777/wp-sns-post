@@ -53,6 +53,8 @@ function dsp_default_settings() {
 		'discord_webhook_form'    => '',
 		'discord_webhook_comment' => '',
 		'discord_webhook_alert'   => '',
+		// ログインだけは「ふだんの送り先」へ回さない（入れたときだけ送る）
+		'discord_webhook_login'   => '',
 		// ひな形（空なら dsp_default_templates() の形）
 		'template_bluesky'         => '',
 		'template_threads'         => '',
@@ -205,10 +207,10 @@ function dsp_log( $post_id, $service, $message ) {
  * HTTP で送って、ステータスコードと JSON の中身（配列）を返す。
  * $body が配列ならフォーム形式、文字列ならそのまま送る。
  */
-function dsp_http( $method, $url, $body = null, $headers = array() ) {
+function dsp_http( $method, $url, $body = null, $headers = array(), $timeout = 20 ) {
 	$args = array(
 		'method'  => $method,
-		'timeout' => 20,
+		'timeout' => $timeout,
 		'headers' => $headers,
 	);
 	if ( null !== $body ) {
@@ -222,9 +224,9 @@ function dsp_http( $method, $url, $body = null, $headers = array() ) {
 	return array( (int) wp_remote_retrieve_response_code( $res ), is_array( $data ) ? $data : array() );
 }
 
-function dsp_http_json( $url, $data, $headers = array() ) {
+function dsp_http_json( $url, $data, $headers = array(), $timeout = 20 ) {
 	$headers['Content-Type'] = 'application/json';
-	return dsp_http( 'POST', $url, wp_json_encode( $data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES ), $headers );
+	return dsp_http( 'POST', $url, wp_json_encode( $data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES ), $headers, $timeout );
 }
 
 /**

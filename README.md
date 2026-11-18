@@ -1,6 +1,6 @@
 # SNS Post
 
-記事を公開したら、Bluesky・Threads・X・Facebook ページ・Discord へ自動で投稿する WordPress プラグインです。フォームの送信やコメントも Discord に知らせます。
+記事を公開したら、Bluesky・Threads・X・Facebook ページ・Discord へ自動で投稿する WordPress プラグインです。フォームの送信・コメント・ログインも Discord に知らせます。
 
 仲介するサービスを通さず、サイトから各 SNS の API へ直接送ります。サイトのデータや SNS の権限を、ほかのサービスに預けずに済みます。
 
@@ -57,6 +57,7 @@
 | フォームの送信 | フォームのプラグインが下のフックを呼んだとき |
 | コメント | コメントが入ったとき（スパム・ゴミ箱は除く） |
 | SNS 投稿の失敗・トークンの期限 | 投稿をあきらめたとき、Threads のトークンを延ばせなくなったとき |
+| ログイン | ログイン画面からだれかが入ったとき（ユーザー・権限・IP・ブラウザ）。**この欄に入れたときだけ送る**（ふだんの送り先・定数へは回さない）。IP が載るので、関係者だけのチャンネルに |
 
 - 用途ごとに送り先を分けられます。空の用途は「ふだんの送り先」へ送ります
 - 1行に1つ書けば、複数のチャンネルへ送ります
@@ -146,7 +147,7 @@ define( 'DSP_FACEBOOK_PAGE_ID', '123456789' );
 define( 'DSP_FACEBOOK_PAGE_TOKEN', 'EAAB...' );
 ```
 
-Discord の Webhook も書けます（すべての用途でこの URL を使います）。
+Discord の Webhook も書けます（ログイン以外のすべての用途でこの URL を使います。ログインは設定画面で入れます）。
 
 ```php
 define( 'DSP_DISCORD_WEBHOOK_URL', 'https://discord.com/api/webhooks/xxxx/yyyy' );

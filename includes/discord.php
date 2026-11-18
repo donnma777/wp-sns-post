@@ -21,7 +21,16 @@ function dsp_discord_channels() {
 		'form'    => 'フォームの送信',
 		'comment' => 'コメント',
 		'alert'   => 'SNS 投稿の失敗・トークンの期限',
+		'login'   => 'ログイン',
 	);
+}
+
+/**
+ * ふだんの送り先・wp-config.php の定数へ回さない用途（欄に入れたときだけ送る）。
+ * 入れ直す前から使っているサイトで、急に別のチャンネルへ届かないように。
+ */
+function dsp_discord_own_only( $channel ) {
+	return 'login' === $channel;
 }
 
 /**
@@ -42,14 +51,18 @@ function dsp_discord_lines( $raw ) {
  * その用途の送り先。wp-config.php の DSP_DISCORD_WEBHOOK_URL があれば、すべての用途でそちらを使う。
  */
 function dsp_discord_urls( $channel, $s = null ) {
-	if ( defined( 'DSP_DISCORD_WEBHOOK_URL' ) && '' !== (string) DSP_DISCORD_WEBHOOK_URL ) {
+	if ( ! dsp_discord_own_only( $channel ) && dsp_discord_from_constant() ) {
 		return dsp_discord_lines( DSP_DISCORD_WEBHOOK_URL );
 	}
 	if ( null === $s ) {
 		$s = dsp_settings();
 	}
 	$urls = isset( $s[ 'discord_webhook_' . $channel ] ) ? dsp_discord_lines( $s[ 'discord_webhook_' . $channel ] ) : array();
-	return $urls ? $urls : dsp_discord_lines( $s['discord_webhook'] );
+	return $urls || dsp_discord_own_only( $channel ) ? $urls : dsp_discord_lines( $s['discord_webhook'] );
+}
+
+function dsp_discord_from_constant() {
+	return defined( 'DSP_DISCORD_WEBHOOK_URL' ) && '' !== (string) DSP_DISCORD_WEBHOOK_URL;
 }
 
 /**
@@ -92,14 +105,16 @@ function dsp_discord_unmask( $raw, $old ) {
  *
  * @return true|string 失敗したときはエラーの文
  */
-function dsp_discord_send_to( $url, $message ) {
+function dsp_discord_send_to( $url, $message, $timeout = 20 ) {
 	list( $code, $data ) = dsp_http_json(
 		$url,
 		array(
 			'content'          => dsp_trim( $message, DSP_DISCORD_MAX ),
 			// 本文に @everyone / @here / <@id> があっても通知しない（フォームやコメントは外部の人が書ける）
 			'allowed_mentions' => array( 'parse' => array() ),
-		)
+		),
+		array(),
+		$timeout
 	);
 	if ( $code >= 200 && $code < 300 ) {
 		return true;
@@ -110,9 +125,9 @@ function dsp_discord_send_to( $url, $message ) {
 /**
  * お知らせを送る（フォーム・コメント・失敗など）。送り先がなければ何もしない。
  */
-function dsp_discord_send( $message, $channel ) {
+function dsp_discord_send( $message, $channel, $timeout = 20 ) {
 	foreach ( dsp_discord_urls( $channel ) as $url ) {
-		$result = dsp_discord_send_to( $url, $message );
+		$result = dsp_discord_send_to( $url, $message, $timeout );
 		if ( true !== $result ) {
 			dsp_log( 0, 'discord', dsp_discord_channels()[ $channel ] . 'の通知を送れません（' . $result . '）' );
 		}
@@ -242,3 +257,30 @@ function dsp_discord_on_comment( $comment_id, $comment ) {
 	);
 }
 add_action( 'wp_insert_comment', 'dsp_discord_on_comment', 10, 2 );
+
+/**
+ * ログインを知らせる（ログイン画面から入ったとき。ログインしたままの再訪問では送らない）。
+ * ログインを待たせないよう、Discord の応答は短く待つ。
+ */
+function dsp_discord_on_login( $user_login, $user ) {
+	if ( ! dsp_discord_urls( 'login' ) || ! ( $user instanceof WP_User ) ) {
+		return;
+	}
+	$names = wp_roles()->get_names();
+	$roles = array();
+	foreach ( (array) $user->roles as $role ) {
+		$roles[] = isset( $names[ $role ] ) ? translate_user_role( $names[ $role ] ) : $role;
+	}
+	$ip = isset( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : '';
+	$ua = isset( $_SERVER['HTTP_USER_AGENT'] ) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_USER_AGENT'] ) ) : '';
+	$lines = array(
+		sprintf( '%s：ログインがありました。', dsp_plain( get_bloginfo( 'name' ) ) ),
+		sprintf( 'ユーザー: %s（%s）', $user->display_name, $user_login ),
+		'権限: ' . ( $roles ? implode( '・', $roles ) : 'なし' ),
+		'IP: ' . ( '' !== $ip ? $ip : '不明' ),
+		'ブラウザ: ' . ( '' !== $ua ? dsp_trim( $ua, 200 ) : '不明' ),
+		'日時: ' . wp_date( 'Y-m-d H:i:s' ),
+	);
+	dsp_discord_send( implode( "\n", $lines ), 'login', 5 );
+}
+add_action( 'wp_login', 'dsp_discord_on_login', 10, 2 );
