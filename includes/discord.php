@@ -198,6 +198,35 @@ function dsp_discord_test( $s ) {
 }
 
 /**
+ * 設定画面の各欄の「この欄にテスト通知」。その欄に保存してある Webhook だけへ送る（'' はふだんの送り先）。
+ *
+ * @return string|WP_Error
+ */
+function dsp_discord_test_channel( $channel, $s ) {
+	$labels = array_merge( array( '' => 'ふだんの送り先' ), dsp_discord_channels() );
+	if ( ! isset( $labels[ $channel ] ) ) {
+		return new WP_Error( 'dsp', '用途がわかりません。' );
+	}
+	$key  = '' === $channel ? 'discord_webhook' : 'discord_webhook_' . $channel;
+	$urls = dsp_discord_lines( $s[ $key ] );
+	if ( ! $urls ) {
+		return new WP_Error( 'dsp', '「' . $labels[ $channel ] . '」の欄に Webhook の URL を入れて、保存してください。' );
+	}
+	$message = sprintf( '%s：「%s」の欄のテスト通知です。', dsp_plain( get_bloginfo( 'name' ) ), $labels[ $channel ] );
+	$errors  = array();
+	foreach ( $urls as $url ) {
+		$result = dsp_discord_send_to( $url, $message );
+		if ( true !== $result ) {
+			$errors[] = dsp_discord_mask( $url ) . ' ' . $result;
+		}
+	}
+	if ( $errors ) {
+		return new WP_Error( 'dsp', implode( ' / ', $errors ) );
+	}
+	return sprintf( '「%s」の欄の %d か所へテスト通知を送りました。Discord を見てください。', $labels[ $channel ], count( $urls ) );
+}
+
+/**
  * フォームの送信を知らせる。フォームのプラグインから、送信が済んだところで呼ぶ。
  *   do_action( 'dsp_form_submitted', 'フォーム名', array( '項目名' => '値', ... ) );
  */

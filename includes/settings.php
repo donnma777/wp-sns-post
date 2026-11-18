@@ -209,6 +209,10 @@ function dsp_handle_action() {
 		case 'test_discord':
 			$result = dsp_discord_test( $s );
 			break;
+		case 'test_discord_channel':
+			$channel = isset( $_POST['channel'] ) ? sanitize_key( wp_unslash( $_POST['channel'] ) ) : '';
+			$result  = dsp_discord_test_channel( $channel, $s );
+			break;
 		case 'refresh_threads':
 			$result = dsp_threads_refresh( true );
 			break;
@@ -721,6 +725,9 @@ function dsp_render_tab_discord( $s ) {
 							<textarea id="dsp-<?php echo esc_attr( $key ); ?>" name="<?php echo esc_attr( $key ); ?>" class="large-text code" rows="2" autocomplete="off" spellcheck="false"
 								<?php if ( '' !== $channel ) : ?>placeholder="<?php echo dsp_discord_own_only( $channel ) ? '空なら送らない' : '空ならふだんの送り先'; ?>"<?php endif; ?>
 							><?php echo esc_textarea( implode( "\n", array_map( 'dsp_discord_mask', dsp_discord_lines( $s[ $key ] ) ) ) ); ?></textarea>
+							<?php if ( dsp_discord_lines( $s[ $key ] ) ) : ?>
+								<p><button type="submit" form="dsp-discord-test" name="channel" value="<?php echo esc_attr( $channel ); ?>" class="button button-small">この欄にテスト通知</button></p>
+							<?php endif; ?>
 							<?php if ( 'post' === $channel ) : ?>
 								<p class="description">記事の公開は、「基本」の送り先で Discord にチェックを入れたときだけ送ります（テストモードの間は送りません）。</p>
 							<?php elseif ( 'form' === $channel ) : ?>
@@ -734,6 +741,14 @@ function dsp_render_tab_discord( $s ) {
 			</table>
 			<?php submit_button( '保存' ); ?>
 		</form>
+		<?php // 各欄の「この欄にテスト通知」が送るフォーム（保存のフォームの中には置けないので、外に置いて form 属性で結ぶ） ?>
+		<form id="dsp-discord-test" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+			<?php wp_nonce_field( 'dsp_action' ); ?>
+			<?php dsp_tab_field(); ?>
+			<input type="hidden" name="action" value="dsp_action" />
+			<input type="hidden" name="do" value="test_discord_channel" />
+		</form>
+		<p class="description">「この欄にテスト通知」は、保存してある URL へ送ります。書き換えたときは、先に保存してください。</p>
 	<?php
 	$used = array_filter(
 		array_map(
@@ -744,7 +759,7 @@ function dsp_render_tab_discord( $s ) {
 		)
 	);
 	if ( $used ) {
-		dsp_action_button( 'test_discord', 'テスト通知を送る' );
+		dsp_action_button( 'test_discord', 'すべてにテスト通知を送る' );
 		echo '<p class="description">使っている Webhook すべてへ、何に使うかを書いて送ります。</p>';
 	}
 }
